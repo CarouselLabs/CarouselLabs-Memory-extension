@@ -5,28 +5,37 @@
     // Listen for messages from the extension
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (request.action === "toggleSidebar") {
-        chrome.storage.sync.get(["apiKey", "access_token"], function (data) {
-          if (data.apiKey || data.access_token) {
-            toggleSidebar();
-          } else {
+        (async () => {
+          try {
+            const auth = await import(chrome.runtime.getURL('utils/auth.js'));
+            const token = auth && auth.getAccessToken ? await auth.getAccessToken() : null;
+            if (token) {
+              toggleSidebar();
+            } else {
+              chrome.runtime.sendMessage({ action: "openPopup" });
+            }
+          } catch (_) {
             chrome.runtime.sendMessage({ action: "openPopup" });
           }
-        });
+        })();
       }
 
       if (request.action === "toggleSidebarSettings") {
-        chrome.storage.sync.get(["apiKey", "access_token"], function (data) {
-          if (data.apiKey || data.access_token) {
-            toggleSidebar(); 
-
-            setTimeout(() => {
-              const settingsTabButton = document.querySelector('.tab-button[data-tab="settings"]'); 
-              if (settingsTabButton) {
-                settingsTabButton.click(); 
-              }
-            }, 200); 
-          }
-        }); 
+        (async () => {
+          try {
+            const auth = await import(chrome.runtime.getURL('utils/auth.js'));
+            const token = auth && auth.getAccessToken ? await auth.getAccessToken() : null;
+            if (token) {
+              toggleSidebar();
+              setTimeout(() => {
+                const settingsTabButton = document.querySelector('.tab-button[data-tab="settings"]');
+                if (settingsTabButton) {
+                  settingsTabButton.click();
+                }
+              }, 200);
+            }
+          } catch (_) {}
+        })();
       }
     });
   }
@@ -102,8 +111,8 @@
     fixedHeader.innerHTML = `
         <div class="header">
           <div class="logo-container">
-            <img src=${chrome.runtime.getURL("icons/mem0-claude-icon.png")} class="openmemory-icon" alt="OpenMemory Logo">
-            <span class="openmemory-logo">OpenMemory</span>
+            <img src=${chrome.runtime.getURL("icons/clabs-logo.svg")} class="openmemory-icon" alt="CarouselLabs Logo">
+            <span class="openmemory-logo">MemLoop</span>
           </div>
           <div class="header-buttons">
             <button id="closeBtn" class="close-button" title="Close">
@@ -180,6 +189,20 @@
     const settingsTabContent = document.createElement("div");
     settingsTabContent.className = "tab-content";
     settingsTabContent.id = "settings-tab";
+    
+    // Add User Profile section
+    const userProfileSection = document.createElement("div");
+    userProfileSection.className = "section";
+    userProfileSection.innerHTML = `
+      <div class="section-header">
+        <h2 class="section-title">User Profile</h2>
+      </div>
+      <div class="user-profile-details">
+        <p><strong>Name:</strong> <span id="userName">Loading...</span></p>
+        <p><strong>Email:</strong> <span id="userEmail">Loading...</span></p>
+      </div>
+    `;
+    settingsTabContent.appendChild(userProfileSection);
     
     // Move memory suggestions to settings tab
     const memoryToggleSection = document.createElement("div");
@@ -379,15 +402,19 @@
       event.stopPropagation();
     });
 
-    // Add styles
+    // Add styles and apply theme
     addStyles();
+    try {
+      const theme = await import(chrome.runtime.getURL('utils/theme.js'));
+      if (theme && theme.applyThemeFromSettings) await theme.applyThemeFromSettings();
+    } catch (_) {}
     
     // Fetch organizations and memories
     fetchOrganizations();
     fetchMemoriesAndCount();
   }
 
-  function saveSettings(saveBtn, saveText, saveLoader, saveMessage, userIdSection, orgSection, projectSection, memoryToggleSection, autoInjectSection, thresholdSection, topKSection, trackSearchSection) {
+  function saveSettings(saveBtn, saveText, saveLoader, saveMessage, memoryToggleSection, autoInjectSection, thresholdSection, topKSection, trackSearchSection) {
     // Show loading state
     saveBtn.disabled = true;
     saveText.style.display = "none";
@@ -395,20 +422,12 @@
     saveMessage.style.display = "none";
     
     // Get all the values
-    const userIdInput = userIdSection.querySelector("#userIdInput");
-    const orgSelect = orgSection.querySelector("#orgSelect");
-    const projectSelect = projectSection.querySelector("#projectSelect");
     const toggleCheckbox = memoryToggleSection.querySelector("#mem0Toggle");
     const autoInjectCheckbox = autoInjectSection.querySelector("#autoInjectToggle");
     const thresholdSlider = thresholdSection.querySelector("#thresholdSlider");
     const topKInput = topKSection.querySelector("#topKInput");
     const trackSearchesCheckbox = trackSearchSection.querySelector("#trackSearchesToggle");
     
-    const userId = userIdInput.value.trim();
-    const selectedOrgId = orgSelect.value;
-    const selectedOrgName = orgSelect.options[orgSelect.selectedIndex]?.text || "";
-    const selectedProjectId = projectSelect.value;
-    const selectedProjectName = projectSelect.options[projectSelect.selectedIndex]?.text || "";
     const memoryEnabled = toggleCheckbox.checked;
     const autoInjectEnabled = autoInjectCheckbox.checked;
     const similarityThreshold = parseFloat(thresholdSlider.value);
@@ -416,11 +435,6 @@
     
     // Prepare settings object
     const settings = {
-      user_id: userId || undefined,
-      selected_org: selectedOrgId || undefined,
-      selected_org_name: selectedOrgName || undefined,
-      selected_project: selectedProjectId || undefined,
-      selected_project_name: selectedProjectName || undefined,
       memory_enabled: memoryEnabled,
       auto_inject_enabled: autoInjectEnabled,
       similarity_threshold: similarityThreshold,
@@ -438,18 +452,19 @@
     // Save to chrome storage
     chrome.storage.sync.set(settings, function() {
       // Send toggle event to API
-      chrome.storage.sync.get(["apiKey", "access_token"], function (data) {
-        const headers = getHeaders(data.apiKey, data.access_token);
-        fetch(`https://api.mem0.ai/v1/extension/`, {
-          method: "POST",
-          headers: headers,
-          body: JSON.stringify({
-            event_type: "extension_toggle_button",
-            additional_data: { "status": memoryEnabled },
-          }),
-        }).catch(error => {
-          console.error("Error sending toggle event:", error);
-        });
+      chrome.storage.sync.get(["access_token"], async function (data) {
+        try {
+          const env = await import(chrome.runtime.getURL('utils/env_config.js'));
+          const base = env && env.resolveGatewayBaseUrl ? await env.resolveGatewayBaseUrl() : null;
+          if (!base) return;
+          const headers = { "Content-Type": "application/json" };
+          if (data.access_token) headers["Authorization"] = `Bearer ${data.access_token}`;
+          fetch(`${base.replace(/\/$/,'')}/telemetry`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ event_type: "extension_toggle_button", status: memoryEnabled, ts: Date.now() })
+          }).catch(()=>{});
+        } catch {}
       });
       
       // Send message to runtime
@@ -565,131 +580,42 @@
     const saveMessage = saveSection.querySelector("#saveMessage");
     
     saveBtn.addEventListener("click", function() {
-      saveSettings(saveBtn, saveText, saveLoader, saveMessage, userIdSection, orgSection, projectSection, memoryToggleSection, autoInjectSection, thresholdSection, topKSection, trackSearchSection);
+      saveSettings(saveBtn, saveText, saveLoader, saveMessage, memoryToggleSection, autoInjectSection, thresholdSection, topKSection, trackSearchSection);
     });
   }
 
-  function fetchOrganizations() {
-    chrome.storage.sync.get(["apiKey", "access_token"], function (data) {
-      if (data.apiKey || data.access_token) {
-        const headers = getHeaders(data.apiKey, data.access_token);
-        fetch("https://api.mem0.ai/api/v1/orgs/organizations/", {
-          method: "GET",
-          headers: headers,
-        })
-          .then((response) => response.json())
-          .then((orgs) => {
-            const orgSelect = document.getElementById("orgSelect");
-            orgSelect.innerHTML = '<option value="">Select an organization</option>';
-            
-            orgs.forEach((org, index) => {
-              const option = document.createElement("option");
-              option.value = org.org_id;
-              option.textContent = org.name;
-              orgSelect.appendChild(option);
-            });
-            
-            // Load saved org selection or select first org by default
-            chrome.storage.sync.get(["selected_org"], function (result) {
-              if (result.selected_org) {
-                orgSelect.value = result.selected_org;
-                fetchProjects(result.selected_org, document.getElementById("projectSelect"));
-              } else if (orgs.length > 0) {
-                // Select first org by default (but don't save until user clicks save)
-                orgSelect.value = orgs[0].org_id;
-                fetchProjects(orgs[0].org_id, document.getElementById("projectSelect"));
-              }
-            });
-          })
-          .catch((error) => {
-            console.error("Error fetching organizations:", error);
-            const orgSelect = document.getElementById("orgSelect");
-            orgSelect.innerHTML = '<option value="">Error loading organizations</option>';
-          });
-      }
-    });
+  async function fetchOrganizations() {
+    // This function is no longer needed with Cognito auth
   }
 
-  function fetchProjects(orgId, projectSelect) {
-    chrome.storage.sync.get(["apiKey", "access_token"], function (data) {
-      if (data.apiKey || data.access_token) {
-        const headers = getHeaders(data.apiKey, data.access_token);
-        fetch(`https://api.mem0.ai/api/v1/orgs/organizations/${orgId}/projects/`, {
-          method: "GET",
-          headers: headers,
-        })
-          .then((response) => response.json())
-          .then((projects) => {
-            projectSelect.innerHTML = '<option value="">Select a project</option>';
-            
-            projects.forEach((project) => {
-              const option = document.createElement("option");
-              option.value = project.project_id;
-              option.textContent = project.name;
-              projectSelect.appendChild(option);
-            });
-            
-            // Load saved project selection or select first project by default
-            chrome.storage.sync.get(["selected_project"], function (result) {
-              if (result.selected_project) {
-                projectSelect.value = result.selected_project;
-              } else if (projects.length > 0) {
-                // Select first project by default (but don't save until user clicks save)
-                projectSelect.value = projects[0].project_id;
-              }
-            });
-          })
-          .catch((error) => {
-            console.error("Error fetching projects:", error);
-            projectSelect.innerHTML = '<option value="">Error loading projects</option>';
-          });
-      }
-    });
+  async function fetchProjects(orgId, projectSelect) {
+    // This function is no longer needed with Cognito auth
   }
 
-  function fetchMemoriesAndCount() {
-    chrome.storage.sync.get(
-      ["apiKey", "access_token", "user_id", "selected_org", "selected_project"],
-      function (data) {
-        if (data.apiKey || data.access_token) {
-          const headers = getHeaders(data.apiKey, data.access_token);
-          
-          // Build query parameters
-          const params = new URLSearchParams();
-          const userId = data.user_id || "chrome-extension-user";
-          params.append("user_id", userId);
-          params.append("page", "1");
-          params.append("page_size", "20");
-          
-          if (data.selected_org) {
-            params.append("org_id", data.selected_org);
-          }
-          
-          if (data.selected_project) {
-            params.append("project_id", data.selected_project);
-          }
-          
-          fetch(`https://api.mem0.ai/v1/memories/?${params.toString()}`, {
-            method: "GET",
-            headers: headers,
-          })
-            .then((response) => response.json())
-            .then((data) => {
-              // Update count and display memories
-              updateMemoryCount(data.count || 0);
-              displayMemories(data.results || []);
-            })
-            .catch((error) => {
-              console.error("Error fetching memories:", error);
-              updateMemoryCount("Error");
-              displayErrorMessage();
-            });
-        } else {
-          updateMemoryCount("Login required");
-          displayErrorMessage("Login required to view memories");
-        }
-      }
-    );
+  async function fetchMemoriesAndCount() {
+    try {
+      const auth = await import(chrome.runtime.getURL('utils/auth.js'));
+      const env = await import(chrome.runtime.getURL('utils/env_config.js'));
+      const token = auth && auth.getAccessToken ? await auth.getAccessToken() : null;
+      const base = env && env.getGatewayBaseUrl ? await env.getGatewayBaseUrl(await env.getSelectedEnv()) : null;
+      if (!token || !base) { updateMemoryCount("Login required"); displayErrorMessage("Login required to view memories"); return; }
+      const tenant = auth && auth.getTenant ? await auth.getTenant() : 'carousel-labs';
+      const headers = { Authorization: `Bearer ${token}` };
+      const params = new URLSearchParams();
+      const userInfo = await auth.getUserInfo();
+      params.append("user_id", userInfo.sub || "chrome-extension-user");
+      const url = `${String(base).replace(/\/$/,'')}/gateway/mem0/${encodeURIComponent(tenant)}/memories?${params.toString()}`;
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(8000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      updateMemoryCount((data && (data.count||data.total||0)) || 0);
+      const items = Array.isArray(data?.results) ? data.results : (Array.isArray(data?.items) ? data.items : []);
+      displayMemories(items);
+    } catch (error) {
+      console.error("Error fetching memories:", error);
+      updateMemoryCount("Error");
+      displayErrorMessage();
+    }
   }
 
   function updateMemoryCount(count) {
@@ -1415,38 +1341,19 @@
     document.head.appendChild(style);
   }
 
-  function logout() {
-    chrome.storage.sync.get(["apiKey", "access_token"], function (data) {
-      const headers = getHeaders(data.apiKey, data.access_token);
-      fetch("https://api.mem0.ai/v1/extension/", {
-        method: "POST",
-        headers: headers,
-        body: JSON.stringify({
-          event_type: "extension_logout"
-        })
-      }).catch(error => {
-        console.error("Error sending logout event:", error);
-      });
-    });
-    chrome.storage.sync.remove(
-      ["apiKey", "userId", "access_token"],
-      function () {
-        const sidebar = document.getElementById("mem0-sidebar");
-        if (sidebar) {
-          sidebar.style.right = "-500px";
-        }
+  async function logout() {
+    try {
+      const auth = await import(chrome.runtime.getURL('utils/auth.js'));
+      if (auth && auth.signOut) {
+        await auth.signOut();
       }
-    );
+    } catch (_) {}
+    const sidebar = document.getElementById("mem0-sidebar");
+    if (sidebar) sidebar.style.right = "-500px";
   }
 
   function openDashboard() {
-    chrome.storage.sync.get(["user_id"], function (data) {
-      const userId = data.user_id || "chrome-extension-user";
-      chrome.runtime.sendMessage({
-        action: "openDashboard",
-        url: `https://app.mem0.ai/dashboard/requests`,
-      });
-    });
+    chrome.runtime.sendMessage({ action: "openDashboard", url: `https://app.mem0.ai/dashboard/requests` });
   }
 
   // Add function to display memories

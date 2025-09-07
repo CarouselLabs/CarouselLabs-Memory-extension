@@ -1,78 +1,52 @@
-# Mem0 Chrome Extension — Cross-LLM Memory
+# MemLoop by CarouselLabs
 
-Mem0 brings ChatGPT-style memory to all your favorite AI assistants. Share context seamlessly across ChatGPT, Claude, Perplexity, and more, making your AI interactions more personalized and efficient.
+MemLoop brings personalized, cross-session memory to your favorite AI assistants. Share context seamlessly across ChatGPT, Claude, Perplexity, and more, making your AI interactions more efficient and powerful.
 
-<a href="https://chromewebstore.google.com/detail/claude-memory/onihkkbipkfeijkadecaafbgagkhglop?hl=en-GB&utm_source=ext_sidebar" style="display: inline-block; padding: 8px 12px; background-color: white; color: #3c4043; text-decoration: none; font-family: 'Roboto', Arial, sans-serif; font-size: 14px; font-weight: 500; border-radius: 4px; border: 1px solid #dadce0; box-shadow: 0 1px 2px rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);">
-  <img src="https://www.google.com/chrome/static/images/chrome-logo.svg" alt="Chrome logo" style="height: 24px; vertical-align: middle; margin-right: 8px;">
-  Add to Chrome, It's Free
-</a>
-<br>
-<br>
-
-Built using [Mem0](https://www.mem0.ai) ❤️
-
-
-## Demo
-
-Watch the Mem0 Chrome Extension in action (full-resolution video available [here](https://www.youtube.com/watch?v=cByzXztn-YY)):
-
-https://github.com/user-attachments/assets/a069a178-631e-4b35-a182-9f4fef7735c4
-
-
-## Features
-
-- **Universal Memory Layer:** Share context across ChatGPT, Claude, Perplexity, and more
-- **Smart Context Detection:** Automatically captures relevant information from your conversations
-- **Intelligent Memory Retrieval:** Surfaces relevant memories at the right time
-- **One-click sync** with existing ChatGPT memories
-- **Memory dashboard** to manage all memories
+Built by CarouselLabs ❤️
 
 ## Installation
 
-1. Download the extension files or clone this repository.
-2. Open Google Chrome and navigate to `chrome://extensions`.
-3. Enable "Developer mode" in the top right corner.
-4. Click "Load unpacked" and select the directory containing the extension files.
-5. The Mem0 Chrome Extension extension should now appear in your Chrome toolbar.
+### For Chrome
 
+1.  Clone this repository.
+2.  Open Google Chrome and navigate to `chrome://extensions`.
+3.  Enable "Developer mode" in the top right corner.
+4.  Click "Load unpacked" and select the directory containing the extension files.
+5.  The MemLoop icon should now appear in your Chrome toolbar.
+
+### For Vivaldi
+
+1.  Clone this repository.
+2.  Open Vivaldi and navigate to `vivaldi://extensions`.
+3.  Enable "Developer mode" in the top right corner.
+4.  Click "Load unpacked" and select the directory containing the extension files.
+5.  The MemLoop icon should now appear in your Vivaldi toolbar.
 
 ## Usage
 
-1. After installation, look for the Mem0 icon in your Chrome toolbar
-2. Sign in with Google
-3. Start chatting with any supported AI assistant
-4. For ChatGPT and Perplexity, just press enter while chatting as you would normally
-5. On Claude, click the Mem0 button or use shortcut ^ + M
+1.  After installation, click the MemLoop icon in your browser's toolbar.
+2.  Sign in with your CarouselLabs account.
+3.  Start chatting with any supported AI assistant.
+4.  MemLoop will automatically save and recall relevant memories to enhance your conversations.
 
-## ❤️ Free to Use
+## Configuration (for Developers)
 
-Mem0 is completely free with:
+The extension is configured to work with the CarouselLabs development environment by default. You can change the target environment and other settings from the extension's Options page.
 
-- No usage limits
-- No ads
-- All features included
+-   **Gateway Base URL (Dev):** `https://api.dev.carousellabs.co`
+-   **Auth Exchange Endpoint (Dev):** `https://api.dev.carousellabs.co/auth/exchange`
 
-## Configuration
+To access the options page:
 
-- API Key: Required for connecting to the Mem0 API. Obtain this from your Mem0 Dashboard.
-- User ID: Your unique identifier in the Mem0 system. If not provided, it defaults to 'chrome-extension-user'.
+1.  Right-click the MemLoop extension icon in your toolbar.
+2.  Select "Options".
 
-## Troubleshooting
-
-If you encounter any issues:
-
-- Check your internet connection
-- Verify you're signed in correctly
-- Clear your browser cache if needed
-- Contact support if issues persist
+From the Options page, you can "Fetch From Gateway" to auto-populate the Cognito configuration for the selected environment.
 
 ## Privacy and Data Security
 
-Your messages are sent to the Mem0 API for extracting and retrieving memories.
+Your messages are processed by a self-hosted instance of Mem0, fronted by the CarouselLabs API Gateway. All data is handled in accordance with CarouselLabs' internal data security policies.
 
 ## Contributing
 
-Contributions to improve Mem0 Chrome Extension are welcome. Please feel free to submit pull requests or open issues for bugs and feature requests.
-
-## License
-MIT License
+This is an internal CarouselLabs project. Contributions are welcome from all CarouselLabs team members.
