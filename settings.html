@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Carousel Labs • Settings</title>
+    <style>
+      body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Open Sans","Helvetica Neue",sans-serif;margin:0;padding:24px;background:#111;color:#eee}
+      h1{font-size:18px;margin:0 0 16px}
+      .section{border:1px solid #2a2a2a;border-radius:8px;padding:16px;margin-bottom:16px;background:#181818}
+      label{display:block;margin:8px 0 4px;color:#bbb}
+      input,select,textarea{width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#0f0f10;color:#eee}
+      .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+      .actions{display:flex;gap:12px;margin-top:12px}
+      button{padding:8px 12px;border:0;border-radius:6px;background:#fff;color:#000;font-weight:600;cursor:pointer}
+      .muted{color:#999;font-size:12px}
+    </style>
+  </head>
+  <body>
+    <h1>Carousel Labs • Settings</h1>
+
+    <div class="section">
+      <h2>Theme</h2>
+      <label for="theme_name">Select theme</label>
+      <select id="theme_name">
+        <option value="dark">dark</option>
+        <option value="midway">midway</option>
+        <option value="refined-midway">refined-midway</option>
+        <option value="light">light</option>
+      </select>
+      <div class="actions">
+        <button id="save_theme">Save Theme</button>
+        <button id="preview_tokens">Preview Tokens</button>
+      </div>
+    </div>
+
+    <div class="section" id="tokens_preview" style="display:none">
+      <h2>Design Tokens Preview</h2>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px">
+        <div style="background:var(--color-primary);height:48px;border-radius:8px"></div>
+        <div style="background:var(--color-secondary);height:48px;border-radius:8px"></div>
+        <div style="background:var(--color-accent);height:48px;border-radius:8px"></div>
+        <div style="background:var(--color-surface);height:48px;border-radius:8px"></div>
+        <div style="background:var(--color-background);height:48px;border-radius:8px;border:1px solid var(--color-border)"></div>
+      </div>
+      <p class="muted" style="margin-top:8px">Preview reflects current theme CSS variables injected into the page.</p>
+    </div>
+      <h2>Environment</h2>
+      <label for="selected_env">Select environment</label>
+      <select id="selected_env">
+        <option value="dev">dev</option>
+        <option value="staging">staging</option>
+        <option value="prod">prod</option>
+      </select>
+      <div class="row" style="margin-top:8px">
+        <div>
+          <label for="gateway_base_url_dev">Gateway Base (dev)</label>
+          <input id="gateway_base_url_dev" placeholder="https://api.dev.example/mem0" />
+        </div>
+        <div>
+          <label for="gateway_base_url_staging">Gateway Base (staging)</label>
+          <input id="gateway_base_url_staging" placeholder="https://api.staging.example/mem0" />
+        </div>
+      </div>
+      <label for="gateway_base_url_prod" style="margin-top:8px">Gateway Base (prod)</label>
+      <input id="gateway_base_url_prod" placeholder="https://api.carousellabs.co/mem0" />
+      <p class="muted">These base URLs are sourced from server-side SSM in backend; the extension only selects which to use.</p>
+      <div class="actions">
+        <button id="save_env">Save Environment</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Authentication (Cognito)</h2>
+      <label for="cognito_domain">Cognito Domain</label>
+      <input id="cognito_domain" placeholder="your-domain.auth.region.amazoncognito.com" />
+      <label for="cognito_client_id">Client ID</label>
+      <input id="cognito_client_id" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxx" />
+      <label for="auth_exchange_url">Auth Exchange Endpoint</label>
+      <input id="auth_exchange_url" placeholder="https://api.carousellabs.co/auth/exchange" />
+      <div class="actions">
+        <button id="fetch_config">Fetch From Gateway</button>
+        <button id="save_auth">Save Auth</button>
+        <button id="clear_token">Clear Token</button>
+      </div>
+      <p class="muted">Sign-in happens via Hosted UI + PKCE in the popup; token is short-lived and stored in session.</p>
+    </div>
+
+    <div class="section">
+      <h2>Privacy & Telemetry</h2>
+      <label><input type="checkbox" id="memory_enabled" /> Enable memory features</label>
+      <label><input type="checkbox" id="telemetry_opt_out" /> Opt-out of telemetry</label>
+      <label for="domain_blacklist">Domain Blacklist (one per line)</label>
+      <textarea id="domain_blacklist" rows="5" placeholder="example.com\ninternal.example"></textarea>
+      <div class="actions">
+        <button id="save_privacy">Save Privacy</button>
+      </div>
+      <p class="muted">We never send page content unless you explicitly save it. Blacklisted domains are always skipped.</p>
+    </div>
+
+    <script src="settings.js"></script>
+  </body>
+  </html>
+
+
+
