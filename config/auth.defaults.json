@@ -1,0 +1,5 @@
+{
+  "cognito_domain": "auth-carousel-dev.auth.eu-west-1.amazoncognito.com",
+  "cognito_client_id": "597c10anfesnatvf2q55a3fa6g",
+  "auth_exchange_url": "https://api.dev.carousellabs.co/auth/exchange"
+}

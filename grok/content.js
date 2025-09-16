@@ -27,16 +27,13 @@ var grokSearch = OPENMEMORY_SEARCH.createOrchestrator({
   fetch: async function(query, opts) {
     const data = await new Promise((resolve) => {
       chrome.storage.sync.get(
-        ["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"],
+        ["userId", "access_token", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"],
         function (items) { resolve(items); }
       );
     });
 
-    const apiKey = data.apiKey;
     const accessToken = data.access_token;
-    if (!apiKey && !accessToken) return [];
-
-    const authHeader = accessToken ? `Bearer ${accessToken}` : `Token ${apiKey}`;
+    if (!accessToken) return [];
     const userId = data.userId || data.user_id || "chrome-extension-user";
     const threshold = (data.similarity_threshold !== undefined) ? data.similarity_threshold : 0.1;
     const topK = (data.top_k !== undefined) ? data.top_k : 10;
@@ -56,25 +53,23 @@ var grokSearch = OPENMEMORY_SEARCH.createOrchestrator({
       ...optionalParams,
     };
 
-    const res = await fetch("https://api.mem0.ai/v2/memories/search/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: authHeader,
-      },
-      body: JSON.stringify(payload),
-      signal: opts && opts.signal
-    });
-
-    if (!res.ok) throw new Error(`API request failed with status ${res.status}`);
-    return await res.json();
+    const gw = await import(chrome.runtime.getURL('utils/mem0_gateway.js'));
+    const params = {
+      q: query,
+      user_id: userId,
+      threshold,
+      limit: topK,
+      ...optionalParams
+    };
+    const resp = gw && gw.searchMemories ? await gw.searchMemories(params) : { items: [] };
+    return (resp && resp.items) ? resp.items : [];
   },
 
   onSuccess: function(normQuery, responseData) {
     if (!memoryModalShown) return;
     const memoryItems = (responseData || []).map(item => ({
       id: item.id || `memory-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-      text: item.memory,
+      text: item.text || item.memory,
       categories: item.categories || []
     }));
     createMemoryModal(memoryItems, false, currentModalSourceButtonId);
@@ -197,6 +192,10 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
       : `Token ${apiKey}`;
 
     const messages = [{ role: "user", content: message }];
+    // Ensure a default for sourceButtonId to avoid no-undef
+    if (typeof sourceButtonId === 'undefined') {
+      var sourceButtonId = 'mem0-icon-button';
+    }
 
     const optionalParams = {}
     if(data.selected_org) {
@@ -206,7 +205,8 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
       optionalParams.project_id = data.selected_project;
     }
 
-    currentModalSourceButtonId = sourceButtonId;
+    // Defensive: ensure a non-empty button id
+    currentModalSourceButtonId = (typeof sourceButtonId !== 'undefined' && sourceButtonId) ? sourceButtonId : (currentModalSourceButtonId || 'mem0-icon-button');
     grokSearch.runImmediate(message);
 
     // New add memory API call (non-blocking)
@@ -446,7 +446,7 @@ function injectMem0Button() {
     }
     
     // Check if our button already exists
-    if (document.querySelector('button[aria-label="OpenMemory"]') || document.querySelector('#mem0-button-container')) {
+    if (document.querySelector('button[aria-label="MemLoop"]') || document.querySelector('#mem0-button-container')) {
       return;
     }
     
@@ -500,7 +500,7 @@ function injectMem0Button() {
     mem0Button.setAttribute('type', 'button');
     mem0Button.setAttribute('tabindex', '0');
     mem0Button.setAttribute('aria-pressed', 'false');
-    mem0Button.setAttribute('aria-label', 'OpenMemory');
+    mem0Button.setAttribute('aria-label', 'MemLoop');
     mem0Button.setAttribute('data-state', 'closed');
     mem0Button.id = 'mem0-icon-button';
     
@@ -553,7 +553,7 @@ function injectMem0Button() {
     
     // Create button content - icon only, similar to Claude style
     mem0Button.innerHTML = `
-      <img src="${chrome.runtime.getURL('icons/mem0-claude-icon-p.png')}" 
+      <img src="${chrome.runtime.getURL('icons/clabs-logo.svg')}" 
            width="18" height="18" style="display: block;">
     `;
     
@@ -721,8 +721,8 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     leftPosition = modalPosition.x;
     topPosition = modalPosition.y;
   } else {
-    // Position relative to the OpenMemory button
-    const mem0Button = document.querySelector('button[aria-label="OpenMemory"]');
+    // Position relative to the MemLoop button
+    const mem0Button = document.querySelector('button[aria-label="MemLoop"]');
     
     if (mem0Button) {
       const buttonRect = mem0Button.getBoundingClientRect();
@@ -878,16 +878,16 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 
   // Add Mem0 logo (updated to SVG)
   const logoImg = document.createElement('img');
-  logoImg.src = chrome.runtime.getURL("icons/mem0-claude-icon.png");
+  logoImg.src = chrome.runtime.getURL("icons/clabs-logo.svg");
   logoImg.style.cssText = `
     width: 26px;
     height: 26px;
     border-radius: 50%;
   `;
 
-  // Add "OpenMemory" title
+  // Add "MemLoop" title
   const title = document.createElement('div');
-  title.textContent = "OpenMemory";
+  title.textContent = "MemLoop";
   title.style.cssText = `
     font-size: 16px;
     font-weight: 600;
@@ -1713,7 +1713,7 @@ async function handleMem0Modal(sourceButtonId = null) {
   // If no message, show a popup and return
   if (!message) {
     // Show message that requires input
-    const mem0Button = document.querySelector('button[aria-label="OpenMemory"]');
+    const mem0Button = document.querySelector('button[aria-label="MemLoop"]');
     if (mem0Button) {
       showButtonPopup(mem0Button, 'Please enter some text first');
     }
@@ -1925,7 +1925,7 @@ function showLoginPopup() {
   `;
   
   const logo = document.createElement('img');
-  logo.src = chrome.runtime.getURL("icons/mem0-claude-icon.png");
+  logo.src = chrome.runtime.getURL("icons/clabs-logo.svg");
   logo.style.cssText = `
     width: 24px;
     height: 24px;
@@ -1934,7 +1934,7 @@ function showLoginPopup() {
   `;
 
   const logoDark = document.createElement('img');
-  logoDark.src = chrome.runtime.getURL("icons/mem0-icon-black.png");
+  logoDark.src = chrome.runtime.getURL("icons/clabs-logo.svg");
   logoDark.style.cssText = `
     width: 24px;
     height: 24px;
@@ -1943,7 +1943,7 @@ function showLoginPopup() {
   `;
   
   const heading = document.createElement('h2');
-  heading.textContent = 'Sign in to OpenMemory';
+  heading.textContent = 'Sign in to MemLoop';
   heading.style.cssText = `
     margin: 0;
     font-size: 18px;
@@ -1983,7 +1983,7 @@ function showLoginPopup() {
   
   // Add text in span for better centering
   const signInText = document.createElement('span');
-  signInText.textContent = 'Sign in with Mem0';
+  signInText.textContent = 'Sign in';
   
   signInButton.appendChild(logoDark);
   signInButton.appendChild(signInText);
@@ -1997,9 +1997,17 @@ function showLoginPopup() {
   });
   
   // Open sign-in page when clicked
-  signInButton.addEventListener('click', () => {
-    window.open('https://app.mem0.ai/login', '_blank');
-    document.body.removeChild(popupOverlay);
+  signInButton.addEventListener('click', async () => {
+    try {
+      await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: 'memloop_signin' }, (resp) => {
+          if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
+          if (!resp || !resp.ok) { reject(new Error((resp && resp.error) || 'signin_failed')); return; }
+          resolve(true);
+        });
+      });
+      document.body.removeChild(popupOverlay);
+    } catch (e) { console.warn('MemLoop signin failed:', e); }
   });
   
   // Assemble popup

@@ -1,0 +1,49 @@
+{
+  "root": true,
+  "env": {
+    "browser": true,
+    "es2021": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 2021,
+    "sourceType": "script"
+  },
+  "globals": {
+    "chrome": "readonly"
+  },
+  "extends": ["eslint:recommended"],
+  "rules": {
+    "no-unused-vars": "off",
+    "no-undef": "error",
+    "no-redeclare": "error",
+    "no-inner-declarations": "off",
+    "no-empty": "off"
+  },
+  "overrides": [
+    {
+      "files": [
+        "background.js",
+        "utils/**/*.js",
+        "scripts/**/*.mjs",
+        "context-menu-memory.js",
+        "direct-url-tracker.js",
+        "sw.js"
+      ],
+      "parserOptions": {
+        "sourceType": "module"
+      }
+    }
+  ],
+  "globals": {
+    "chrome": "readonly",
+    "process": "readonly",
+    "sendExtensionEvent": "readonly",
+    "getBrowser": "readonly",
+    "MEMLOOP_PROMPTS": "readonly",
+    "OPENMEMORY_PROMPTS": "readonly",
+    "OPENMEMORY_SEARCH": "readonly",
+    "MEMLOOP_SEARCH": "readonly"
+  }
+}
+
+

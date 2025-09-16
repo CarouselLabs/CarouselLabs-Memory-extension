@@ -10,10 +10,21 @@
             const auth = await import(chrome.runtime.getURL('utils/auth.js'));
             const token = auth && auth.getAccessToken ? await auth.getAccessToken() : null;
             if (token) {
-              toggleSidebar();
-            } else {
+            toggleSidebar();
+          } else {
+            // Request background to perform sign-in flow; fallback to Options if it fails
+            try {
+              chrome.runtime.sendMessage({ type: 'memloop_signin' }, (resp) => {
+                if (resp && resp.ok) {
+                  toggleSidebar();
+                } else {
+                  chrome.runtime.sendMessage({ action: "openPopup" });
+                }
+              });
+            } catch (_) {
               chrome.runtime.sendMessage({ action: "openPopup" });
             }
+          }
           } catch (_) {
             chrome.runtime.sendMessage({ action: "openPopup" });
           }
@@ -26,14 +37,14 @@
             const auth = await import(chrome.runtime.getURL('utils/auth.js'));
             const token = auth && auth.getAccessToken ? await auth.getAccessToken() : null;
             if (token) {
-              toggleSidebar();
-              setTimeout(() => {
-                const settingsTabButton = document.querySelector('.tab-button[data-tab="settings"]');
-                if (settingsTabButton) {
-                  settingsTabButton.click();
-                }
-              }, 200);
-            }
+            toggleSidebar(); 
+            setTimeout(() => {
+              const settingsTabButton = document.querySelector('.tab-button[data-tab="settings"]'); 
+              if (settingsTabButton) {
+                settingsTabButton.click(); 
+              }
+            }, 200); 
+          }
           } catch (_) {}
         })();
       }
@@ -105,13 +116,24 @@
     const sidebarContainer = document.createElement("div");
     sidebarContainer.id = "mem0-sidebar";
 
+    // Inject CarouselLabs design tokens stylesheet (once)
+    try {
+      if (!document.querySelector('link[data-clabs-tokens="1"]')) {
+        const link = document.createElement('link');
+        link.setAttribute('rel', 'stylesheet');
+        link.setAttribute('href', chrome.runtime.getURL('themes/generated/carousel-labs.tokens.css'));
+        link.setAttribute('data-clabs-tokens', '1');
+        document.head.appendChild(link);
+      }
+    } catch (_) {}
+
     // Create fixed header
     const fixedHeader = document.createElement("div");
     fixedHeader.className = "fixed-header";
     fixedHeader.innerHTML = `
         <div class="header">
           <div class="logo-container">
-            <img src=${chrome.runtime.getURL("icons/clabs-logo.svg")} class="openmemory-icon" alt="CarouselLabs Logo">
+            <img src="${chrome.runtime.getURL("icons/CLabs_Logo_Beaker-BlackOnWhite_v2.svg")}" class="openmemory-icon" alt="CarouselLabs Logo">
             <span class="openmemory-logo">MemLoop</span>
           </div>
           <div class="header-buttons">
@@ -404,13 +426,15 @@
 
     // Add styles and apply theme
     addStyles();
-    try {
-      const theme = await import(chrome.runtime.getURL('utils/theme.js'));
-      if (theme && theme.applyThemeFromSettings) await theme.applyThemeFromSettings();
-    } catch (_) {}
+    import(chrome.runtime.getURL('utils/theme.js'))
+      .then((theme) => {
+        if (theme && theme.applyThemeFromSettings) {
+          return theme.applyThemeFromSettings();
+        }
+      })
+      .catch(() => {});
     
-    // Fetch organizations and memories
-    fetchOrganizations();
+    // Fetch memories
     fetchMemoriesAndCount();
   }
 
@@ -451,21 +475,26 @@
     
     // Save to chrome storage
     chrome.storage.sync.set(settings, function() {
-      // Send toggle event to API
-      chrome.storage.sync.get(["access_token"], async function (data) {
-        try {
-          const env = await import(chrome.runtime.getURL('utils/env_config.js'));
-          const base = env && env.resolveGatewayBaseUrl ? await env.resolveGatewayBaseUrl() : null;
-          if (!base) return;
-          const headers = { "Content-Type": "application/json" };
-          if (data.access_token) headers["Authorization"] = `Bearer ${data.access_token}`;
-          fetch(`${base.replace(/\/$/,'')}/telemetry`, {
-            method: "POST",
-            headers,
-            body: JSON.stringify({ event_type: "extension_toggle_button", status: memoryEnabled, ts: Date.now() })
-          }).catch(()=>{});
-        } catch {}
-      });
+      // Send toggle event to API (no await in callback)
+      new Promise((resolve) => chrome.storage.sync.get(["access_token"], resolve))
+        .then((data) => import(chrome.runtime.getURL('utils/env_config.js')).then((env) => ({ data, env })))
+        .then(({ data, env }) => {
+          const resolveBase = env && env.resolveGatewayBaseUrl ? env.resolveGatewayBaseUrl() : Promise.resolve(null);
+          return resolveBase.then((base) => {
+            if (!base) return null;
+            const headers = { "Content-Type": "application/json" };
+            if (data.access_token) headers["Authorization"] = `Bearer ${data.access_token}`;
+            // Sanitize base without regex (some sites block /.../ flags parsing)
+            const sanitizedBase = (String(base) || '').endsWith('/') ? String(base).slice(0, -1) : String(base);
+            const url = `${sanitizedBase}/telemetry`;
+            return fetch(url, {
+              method: "POST",
+              headers,
+              body: JSON.stringify({ event_type: "extension_toggle_button", status: settings.memory_enabled, ts: Date.now() })
+            }).catch(() => {});
+          });
+        })
+        .catch(() => {});
       
       // Send message to runtime
       chrome.runtime.sendMessage({
@@ -537,9 +566,9 @@
       const projectSelect = projectSection.querySelector("#projectSelect");
       projectSelect.innerHTML = '<option value="">Loading projects...</option>';
       
-      // Fetch projects for selected org
-      if (selectedOrgId) {
-        fetchProjects(selectedOrgId, projectSelect);
+      // Fetch projects for selected org (guard if helper missing)
+      if (selectedOrgId && typeof window !== 'undefined' && typeof window.fetchProjects === 'function') {
+        window.fetchProjects(selectedOrgId, projectSelect);
       } else {
         projectSelect.innerHTML = '<option value="">Select an organization first</option>';
       }
@@ -584,38 +613,43 @@
     });
   }
 
-  async function fetchOrganizations() {
-    // This function is no longer needed with Cognito auth
-  }
-
-  async function fetchProjects(orgId, projectSelect) {
-    // This function is no longer needed with Cognito auth
-  }
-
-  async function fetchMemoriesAndCount() {
-    try {
-      const auth = await import(chrome.runtime.getURL('utils/auth.js'));
-      const env = await import(chrome.runtime.getURL('utils/env_config.js'));
-      const token = auth && auth.getAccessToken ? await auth.getAccessToken() : null;
-      const base = env && env.getGatewayBaseUrl ? await env.getGatewayBaseUrl(await env.getSelectedEnv()) : null;
-      if (!token || !base) { updateMemoryCount("Login required"); displayErrorMessage("Login required to view memories"); return; }
-      const tenant = auth && auth.getTenant ? await auth.getTenant() : 'carousel-labs';
-      const headers = { Authorization: `Bearer ${token}` };
-      const params = new URLSearchParams();
-      const userInfo = await auth.getUserInfo();
-      params.append("user_id", userInfo.sub || "chrome-extension-user");
-      const url = `${String(base).replace(/\/$/,'')}/gateway/mem0/${encodeURIComponent(tenant)}/memories?${params.toString()}`;
-      const res = await fetch(url, { headers, signal: AbortSignal.timeout(8000) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      updateMemoryCount((data && (data.count||data.total||0)) || 0);
-      const items = Array.isArray(data?.results) ? data.results : (Array.isArray(data?.items) ? data.items : []);
-      displayMemories(items);
-    } catch (error) {
-      console.error("Error fetching memories:", error);
-      updateMemoryCount("Error");
-      displayErrorMessage();
-    }
+  function fetchMemoriesAndCount() {
+    (async () => {
+      try {
+        const auth = await import(chrome.runtime.getURL('utils/auth.js'));
+        const env = await import(chrome.runtime.getURL('utils/env_config.js'));
+        const token = auth && auth.getAccessToken ? await auth.getAccessToken() : null;
+        const selectedEnv = await (env && env.getSelectedEnv ? env.getSelectedEnv() : Promise.resolve(null));
+        const base = env && env.getGatewayBaseUrl ? await env.getGatewayBaseUrl(selectedEnv) : null;
+        if (!token || !base) {
+          updateMemoryCount("Login required");
+          displayErrorMessage("Login required to view memories");
+          return;
+        }
+        const tenant = auth && auth.getTenant ? await auth.getTenant() : 'carousel-labs';
+        const headers = { Authorization: `Bearer ${token}` };
+        const params = new URLSearchParams();
+        const userInfo = await auth.getUserInfo();
+        params.append("user_id", userInfo.sub || "chrome-extension-user");
+        const sanitizedBase = (String(base) || '').endsWith('/') ? String(base).slice(0, -1) : String(base);
+        const url = `${sanitizedBase}/gateway/mem0/${encodeURIComponent(tenant)}/memories?${params.toString()}`;
+        const res = await fetch(url, { headers, signal: AbortSignal.timeout(8000) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        updateMemoryCount((data && (data.count || data.total || 0)) || 0);
+        const items = Array.isArray(data?.results) ? data.results : (Array.isArray(data?.items) ? data.items : []);
+        displayMemories(items);
+      } catch (error) {
+        // Use structured logger if available, fallback to console
+        if (window.CarouselLabsLogger) {
+          window.CarouselLabsLogger.logger.error("Error fetching memories", { error: error.message });
+        } else {
+              console.error("Error fetching memories:", error);
+        }
+              updateMemoryCount("Error");
+              displayErrorMessage();
+        }
+    })();
   }
 
   function updateMemoryCount(count) {
@@ -674,25 +708,45 @@
   function addStyles() {
     const style = document.createElement("style");
     style.textContent = `
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;600;700&display=swap');
         
         :root {
-          --bg-dark: #18181b;
-          --bg-card: #27272a;
-          --bg-button: #3b3b3f;
-          --bg-button-hover: #4b4b4f;
-          --text-white: #ffffff;
-          --text-gray: #a1a1aa;
-          --purple: #7a5bf7;
-          --border-color: #27272a;
-          --tag-bg: #3b3b3f;
-          --scrollbar-bg: #18181b;
-          --scrollbar-thumb: #3b3b3f;
-          --success-color: #22c55e;
+          /* CarouselLabs Design Tokens */
+          --colors-jet-900: #131416;
+          --colors-forest-600: #2F8F5A;
+          --colors-mint-400: #4DB9A5;
+          --colors-cyan-300: #17D8FD;
+          --colors-ivory-50: #E1E1E3;
+          --light-colors-pearl-50: #FEFEFE;
+          --light-colors-pearl-100: #F8F9FA;
+          --light-colors-slate-700: #334155;
+          --light-colors-slate-800: #1E293B;
+          --light-colors-gray-300: #CBD5E1;
+          --light-colors-gray-400: #94A3B8;
+          --light-colors-gray-500: #64748B;
+          --typography-body-font-family: Inter;
+          --typography-h3-font-family: Space Grotesk;
+          --spacing-4: 16px;
+          --spacing-6: 24px;
+          
+          /* Semantic Variables */
+          --bg-dark: var(--colors-jet-900);
+          --bg-card: var(--light-colors-slate-800);
+          --bg-button: var(--light-colors-slate-700);
+          --bg-button-hover: var(--colors-forest-600);
+          --text-white: var(--light-colors-pearl-50);
+          --text-gray: var(--light-colors-gray-400);
+          --purple: var(--colors-mint-400);
+          --border-color: var(--light-colors-slate-700);
+          --tag-bg: var(--light-colors-slate-700);
+          --scrollbar-bg: var(--colors-jet-900);
+          --scrollbar-thumb: var(--light-colors-slate-700);
+          --success-color: var(--colors-forest-600);
+          --accent-color: var(--colors-cyan-300);
         }
         
         #mem0-sidebar {
-          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+          font-family: var(--typography-body-font-family), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
           position: fixed; 
           top: 60px;
           right: 50px;
@@ -790,13 +844,16 @@
         
         .openmemory-logo {
           height: 24px;
-          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-family: var(--typography-h3-font-family), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
           font-style: normal;
           font-weight: 600;
           font-size: 20px;
           line-height: 24px;
           letter-spacing: -0.03em;
-          color: var(--text-white);
+          background: linear-gradient(135deg, var(--colors-mint-400), var(--colors-cyan-300));
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
         }
         
         .header-buttons {
@@ -874,7 +931,7 @@
         }
         
         .memory-count {
-          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-family: var(--typography-body-font-family), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
           font-style: normal;
           font-weight: 500;
           font-size: 18px;
@@ -933,7 +990,7 @@
         }
         
         .section-description {
-          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-family: var(--typography-body-font-family), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
           font-style: normal;
           font-weight: 400;
           font-size: 14px;
@@ -1144,7 +1201,7 @@
           border-radius: 8px;
           color: var(--text-white);
           font-size: 14px;
-          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-family: var(--typography-body-font-family), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
           transition: border-color 0.2s ease, background-color 0.2s ease;
           box-sizing: border-box;
         }
@@ -1202,7 +1259,7 @@
           align-items: center;
           justify-content: center;
           gap: 8px;
-          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-family: var(--typography-body-font-family), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
         
         .save-button:hover:not(:disabled) {
@@ -1341,15 +1398,17 @@
     document.head.appendChild(style);
   }
 
-  async function logout() {
-    try {
-      const auth = await import(chrome.runtime.getURL('utils/auth.js'));
-      if (auth && auth.signOut) {
-        await auth.signOut();
-      }
-    } catch (_) {}
-    const sidebar = document.getElementById("mem0-sidebar");
-    if (sidebar) sidebar.style.right = "-500px";
+  function logout() {
+    (async () => {
+      try {
+        const auth = await import(chrome.runtime.getURL('utils/auth.js'));
+        if (auth && auth.signOut) {
+          await auth.signOut();
+        }
+      } catch (_) {}
+        const sidebar = document.getElementById("mem0-sidebar");
+      if (sidebar) sidebar.style.right = "-500px";
+    })();
   }
 
   function openDashboard() {
@@ -1458,6 +1517,26 @@
     
     memoryCardsContainer.innerHTML = `<p class="memory-error">${message}</p>`;
   }
+
+  // Initialize structured logging
+  let logger;
+  (async () => {
+    try {
+      const { logger: structuredLogger } = await import(chrome.runtime.getURL('utils/structured_logger.js'));
+      logger = structuredLogger.child({ module: 'sidebar' });
+      window.CarouselLabsLogger = window.CarouselLabsLogger || {};
+      window.CarouselLabsLogger.logger = logger;
+      logger.info('Sidebar logger initialized');
+    } catch (error) {
+      console.warn('Failed to initialize structured logger, using console fallback:', error);
+      logger = {
+        info: (msg, extra) => console.log(`[INFO] ${msg}`, extra),
+        warn: (msg, extra) => console.warn(`[WARN] ${msg}`, extra),
+        error: (msg, extra) => console.error(`[ERROR] ${msg}`, extra),
+        userAction: (action, details) => console.log(`[USER] ${action}`, details)
+      };
+    }
+  })();
 
   // Initialize the listener when the script loads
   if (document.readyState === "loading") {

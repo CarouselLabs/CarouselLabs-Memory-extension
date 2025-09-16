@@ -1,0 +1,37 @@
+:root{
+  --color-primary: #000000;
+  --color-secondary: #FF4500;
+  --color-accent: #FF8C00;
+  --color-background: #FFFFFF;
+  --color-surface: #F8F8F8;
+  --color-text-primary: #000000;
+  --color-text-secondary: #333333;
+  --color-text-muted: #666666;
+  --color-border: #E0E0E0;
+  --color-success: #16A34A;
+  --color-warning: #FACC15;
+  --color-error: #DC2626;
+  --color-info: #2563EB;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.1);
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+  --easing-default: cubic-bezier(0.25, 0.8, 0.25, 1);
+  --easing-smooth: cubic-bezier(0.645, 0.045, 0.355, 1);
+  --easing-bounce: cubic-bezier(0.68,-0.55,0.265,1.55);
+  --bg-dark: #FFFFFF;
+  --bg-card: #F8F8F8;
+  --bg-button: #F8F8F8;
+  --bg-button-hover: #666666;
+  --text-white: #000000;
+  --text-gray: #666666;
+  --purple: #000000;
+  --border-color: #E0E0E0;
+  --tag-bg: #F8F8F8;
+  --scrollbar-bg: #FFFFFF;
+  --scrollbar-thumb: #F8F8F8;
+  --success-color: #16A34A;
+}

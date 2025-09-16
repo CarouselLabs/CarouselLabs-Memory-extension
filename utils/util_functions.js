@@ -5,53 +5,27 @@
  * @param {Function} callback - Optional callback function called after attempt (receives success boolean)
  */
 function sendExtensionEvent(eventType, additionalData = {}, callback = null) {
-    chrome.storage.sync.get(["apiKey", "access_token", "userId", "user_id"], function (data) {
-        if (!data.apiKey && !data.access_token) {
-            if (callback) callback(false); 
-            return; 
-        }
-
-        const headers = {
-            "Content-Type": "application/json",
-        }; 
-    
-        if (data.access_token) {
-            headers["Authorization"] = `Bearer ${data.access_token}`;
-        } else if (data.apiKey) {
-            headers["Authorization"] = `Token ${data.apiKey}`;
-        }
-    
-        const payload = {
-            event_type: eventType,
-        }; 
-
-        extraData = {
-            timestamp: new Date().toISOString(), 
-            version: chrome.runtime.getManifest().version, 
-            user_agent: navigator.userAgent,
-            user_id: data.userId || data.user_id || "chrome-extension-user",
-            ...additionalData 
-        }
-
-        payload.additional_data = extraData; 
-
-        console.log("eventType", eventType)
-        console.log("payload", payload)
-    
-        fetch("https://api.mem0.ai/v1/extension/", {
-            method: "POST", 
-            headers: headers,
-            body: JSON.stringify(payload),
-        })
-        .then(response => {
-            const success = response.ok; 
-            if (callback) callback(success); 
-        })
-        .catch(error => {
-            console.error(`Error sending ${eventType} event:`, error);
-            if (callback) callback(false);
-        });
-    }); 
+    chrome.storage.sync.get(["userId", "user_id"], async function () {
+        try {
+            const env = await import(chrome.runtime.getURL('utils/env_config.js'));
+            const base = env && env.resolveGatewayBaseUrl ? await env.resolveGatewayBaseUrl() : null;
+            if (!base) { if (callback) callback(false); return; }
+            const payload = {
+                event_type: eventType,
+                additional_data: {
+                    timestamp: new Date().toISOString(),
+                    version: chrome.runtime.getManifest().version,
+                    user_agent: navigator.userAgent,
+                    ...additionalData
+                }
+            };
+            fetch(`${base}/extension/events`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            }).then(r=>{ if (callback) callback(r.ok); }).catch(()=>{ if (callback) callback(false); });
+        } catch (e) { if (callback) callback(false); }
+    });
 }
 
 function getBrowser() {

@@ -8,7 +8,6 @@
     return new Promise((resolve) => {
       chrome.storage.sync.get(
         [
-          "apiKey",
           "access_token",
           "user_id",
           "selected_org",
@@ -17,8 +16,7 @@
         ],
         (d) => {
           resolve({
-            hasCreds: Boolean(d.apiKey || d.access_token),
-            apiKey: d.apiKey || null,
+            hasCreds: Boolean(d.access_token),
             accessToken: d.access_token || null,
             userId: d.user_id || "chrome-extension-user",
             orgId: d.selected_org || null,
@@ -47,9 +45,7 @@
 
   async function addMemory(content, settings, pageUrl, engine) {
     const headers = { "Content-Type": "application/json" };
-    if (settings.accessToken) headers.Authorization = `Bearer ${settings.accessToken}`;
-    else if (settings.apiKey) headers.Authorization = `Token ${settings.apiKey}`;
-    else return false;
+    if (settings.accessToken) headers.Authorization = `Bearer ${settings.accessToken}`; else return false;
 
     const body = {
       messages: [{ role: "user", content }],
@@ -65,21 +61,12 @@
     if (settings.orgId) body.org_id = settings.orgId;
     if (settings.projectId) body.project_id = settings.projectId;
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
     try {
-      const res = await fetch("https://api.mem0.ai/v1/memories/", {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-      return res.ok;
-    } catch {
-      return false;
-    } finally {
-      clearTimeout(timeout);
-    }
+      const gw = await import(chrome.runtime.getURL('utils/mem0_gateway.js'));
+      const tenant = settings.orgId || settings.projectId || 'carousel-labs';
+      const ok = gw && gw.saveMemory ? await gw.saveMemory({ tenant, body }) : false;
+      return ok;
+    } catch { return false; }
   }
 
   function maybeSend(engine, query) {

@@ -119,11 +119,9 @@ function getTextarea() {
         setTimeout(() => {
           if (!sendListenerAdded) {
             addSendButtonListener();
-          } else {
-          }
+          } else { /* no-op */ }
         }, 500);
-      } else {
-      }
+      } else { /* no-op */ }
       return textarea;
     }
   }
@@ -434,8 +432,7 @@ function addSendButtonListener() {
     sendButton.addEventListener('click', function() {
       captureAndStoreMemory();
     });
-  } else if (sendButton) {
-  }
+  } else if (sendButton) { /* no-op */ }
   
   // Handle textarea for Enter key press separately
   const textarea = getTextarea();
@@ -452,16 +449,13 @@ function addSendButtonListener() {
           return;
         }
       });
-    } else {
-    }
-  } else {
-  }
+    } else { /* no-op */ }
+  } else { /* no-op */ }
   
   // **TIMING FIX: Only mark as added if we actually found and set up both elements**
   if (textarea && sendButton) {
     sendListenerAdded = true;
-  } else {
-  }
+  } else { /* no-op */ }
 }
 
 async function handleMem0Processing(capturedText, clickSendButton = false) {
@@ -721,7 +715,7 @@ function injectMem0Button() {
     
     // Add icon and text to button label
     const iconImg = document.createElement('img');
-    iconImg.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
+    iconImg.src = chrome.runtime.getURL('icons/clabs-logo.svg');
     iconImg.style.cssText = `
       width: 18px;
       height: 18px;
@@ -1046,7 +1040,7 @@ function showLoginPopup() {
   `;
   
   const heading = document.createElement('h2');
-  heading.textContent = 'Sign in to OpenMemory';
+  heading.textContent = 'Sign in to MemLoop';
   heading.style.cssText = `
     margin: 0;
     font-size: 18px;
@@ -1088,7 +1082,7 @@ function showLoginPopup() {
   
   // Add logo and text
   const logoDark = document.createElement('img');
-  logoDark.src = chrome.runtime.getURL("icons/mem0-claude-icon.png");
+  logoDark.src = chrome.runtime.getURL("icons/clabs-logo.svg");
   logoDark.style.cssText = `
     width: 20px;
     height: 20px;
@@ -1096,7 +1090,7 @@ function showLoginPopup() {
   `;
   
   const signInText = document.createElement('span');
-  signInText.textContent = 'Sign in with OpenMemory';
+  signInText.textContent = 'Sign in';
   
   signInButton.appendChild(logoDark);
   signInButton.appendChild(signInText);
@@ -1110,9 +1104,17 @@ function showLoginPopup() {
   });
   
   // Open sign-in page when clicked
-  signInButton.addEventListener('click', () => {
-    window.open('https://app.mem0.ai/login', '_blank');
-    document.body.removeChild(popupOverlay);
+  signInButton.addEventListener('click', async () => {
+    try {
+      await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: 'memloop_signin' }, (resp) => {
+          if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
+          if (!resp || !resp.ok) { reject(new Error((resp && resp.error) || 'signin_failed')); return; }
+          resolve(true);
+        });
+      });
+      document.body.removeChild(popupOverlay);
+    } catch (e) { console.warn('MemLoop signin failed:', e); }
   });
   
   // Assemble popup
@@ -1254,16 +1256,16 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 
   // Add Mem0 logo
   const logoImg = document.createElement('img');
-  logoImg.src = chrome.runtime.getURL("icons/mem0-claude-icon.png");
+  logoImg.src = chrome.runtime.getURL("icons/clabs-logo.svg");
   logoImg.style.cssText = `
     width: 26px;
     height: 26px;
     border-radius: 50%;
   `;
 
-  // Add "OpenMemory" title
+  // Add "MemLoop" title
   const title = document.createElement('div');
-  title.textContent = "OpenMemory";
+  title.textContent = "MemLoop";
   title.style.cssText = `
     font-size: 16px;
     font-weight: 600;

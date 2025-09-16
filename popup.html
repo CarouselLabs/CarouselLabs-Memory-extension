@@ -1,80 +1,258 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="carousel-labs">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mem0 Sign In</title>
+    <title>MemLoop - CarouselLabs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="themes/generated/carousel-labs.tokens.css" />
     <style>
+      :root {
+        --colors-jet-900: #131416;
+        --colors-forest-600: #2F8F5A;
+        --colors-mint-400: #4DB9A5;
+        --colors-cyan-300: #17D8FD;
+        --colors-ivory-50: #E1E1E3;
+        --light-colors-pearl-50: #FEFEFE;
+        --light-colors-pearl-100: #F8F9FA;
+        --light-colors-pearl-200: #F1F3F4;
+        --light-colors-forest-500: #2F8F5A;
+        --light-colors-mint-400: #4DB9A5;
+        --light-colors-cyan-300: #17D8FD;
+        --light-colors-slate-700: #334155;
+        --light-colors-slate-800: #1E293B;
+        --light-colors-gray-300: #CBD5E1;
+        --light-colors-gray-400: #94A3B8;
+        --typography-body-font-family: Inter;
+        --typography-h3-font-family: Space Grotesk;
+        --spacing-4: 16px;
+        --spacing-6: 24px;
+        --spacing-8: 32px;
+      }
+      
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
-        width: 300px;
+        font-family: var(--typography-body-font-family), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        width: 320px;
         margin: 0;
-        padding: 20px;
-        background-color: #1C1C1E;
-        color: white;
+        padding: var(--spacing-6);
+        background: linear-gradient(135deg, var(--colors-jet-900) 0%, var(--light-colors-slate-800) 100%);
+        color: var(--light-colors-pearl-50);
+        min-height: 400px;
       }
       .logo-container {
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
-        margin-bottom: 16px;
+        margin-bottom: var(--spacing-8);
+        text-align: center;
       }
       .logo {
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
-        margin-right: 12px;
+        width: 48px;
+        height: 48px;
+        margin-bottom: var(--spacing-4);
+        filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
       }
-      .heading {
-        margin: 0;
-        font-size: 18px;
+      .typography-logo {
+        width: 180px;
+        height: auto;
+        margin-bottom: var(--spacing-4);
+        filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+      }
+      .brand-title {
+        font-family: var(--typography-h3-font-family);
+        font-size: 24px;
         font-weight: 600;
+        margin: 0;
+        background: linear-gradient(135deg, var(--colors-mint-400), var(--colors-cyan-300));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+      .brand-subtitle {
+        font-size: 12px;
+        color: var(--light-colors-gray-400);
+        margin: 4px 0 0 0;
+        font-weight: 400;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
       }
       .content {
         text-align: center;
       }
       .message {
-        margin-bottom: 24px;
-        color: #D4D4D8;
+        margin-bottom: var(--spacing-8);
+        color: var(--light-colors-gray-300);
         font-size: 14px;
-        line-height: 1.5;
+        line-height: 1.6;
         text-align: center;
+        font-weight: 400;
       }
       .button {
         width: 100%;
-        padding: 10px;
-        background-color: white;
-        color: black;
+        padding: 12px var(--spacing-4);
+        background: linear-gradient(135deg, var(--colors-mint-400), var(--light-colors-mint-400));
+        color: var(--light-colors-pearl-50);
         border: none;
-        border-radius: 8px;
+        border-radius: 12px;
         font-size: 14px;
         font-weight: 600;
+        font-family: var(--typography-body-font-family);
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        transition: background-color 0.2s;
-        margin-top: 20px;
+        transition: all 0.2s ease;
+        margin-top: var(--spacing-6);
+        box-shadow: 0 4px 12px rgba(77, 185, 165, 0.3);
       }
       .button:hover {
-        background-color: #f5f5f5;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(77, 185, 165, 0.4);
+        background: linear-gradient(135deg, var(--light-colors-mint-400), var(--colors-cyan-300));
+      }
+      .button:active {
+        transform: translateY(0);
+      }
+      .button-secondary {
+        background: rgba(255, 255, 255, 0.1);
+        color: var(--light-colors-pearl-50);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        box-shadow: none;
+      }
+      .button-secondary:hover {
+        background: rgba(255, 255, 255, 0.15);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
       }
       .google-icon {
         margin-right: 10px;
       }
+      .signed-in-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+      .user-info {
+        text-align: left;
+      }
+      .quick-save-section, .recommended-section {
+        margin-top: 20px;
+        text-align: left;
+      }
+      .section-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--colors-ivory-50, #A1A1AA);
+        margin-bottom: 8px;
+      }
+      #quickSaveTextarea {
+        width: 100%;
+        box-sizing: border-box;
+        height: 80px;
+        border-radius: 8px;
+        border: 1px solid var(--colors-ivory-50, #555);
+        background: var(--colors-jet-900, #333);
+        color: var(--light-colors-pearl-50, #ffffff);
+        padding: 8px;
+        font-family: inherit;
+      }
+      .memory-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+      .memory-item {
+        padding: 8px 0;
+        border-bottom: 1px solid #333;
+        font-size: 13px;
+      }
+      .memory-text {
+        margin-bottom: 4px;
+      }
+      .memory-score {
+        font-size: 11px;
+        color: #A1A1AA;
+        font-family: monospace;
+      }
+      .memory-item:last-child {
+        border-bottom: none;
+      }
+      .loading-skeleton {
+        height: 40px;
+        background: #333;
+        border-radius: 4px;
+        margin-bottom: 8px;
+      }
+      .loading, .empty, .error {
+        text-align: center;
+        padding: 20px;
+      }
     </style>
   </head>
   <body>
-    <div class="logo-container">
-      <h2 class="heading">Sign in to OpenMemory</h2>
-    </div>
-    <div class="content">
-      <p class="message">Please sign in to access your memories and personalize your conversations!</p>
-      <button id="googleSignInButton" class="button">
-        <img src="icons/mem0-icon-black.png" alt="Mem0 Logo" class="logo" />
-        <span>Sign in with Mem0</span>
-      </button>
+    <div class="container">
+      <div id="signedOutView">
+        <div class="logo-container">
+          <!-- Option 1: Beaker + MemLoop text + subtitle -->
+          <img src="icons/CLabs_Logo_Beaker-WhiteOnBlack_v2.svg" alt="CarouselLabs Beaker" class="logo">
+          <h1 class="brand-title">MemLoop</h1>
+          <p class="brand-subtitle">empowered by CarouselLabs</p>
+          
+          <!-- Option 2: Full CarouselLabs typography logo + MemLoop subtitle (uncomment to use)
+          <img src="icons/CLabs_Logo_WhiteOnBlack_v2.svg" alt="CarouselLabs" class="typography-logo">
+          <h1 class="brand-title">MemLoop</h1>
+          -->
+        </div>
+        <p class="message">Your AI conversations, <strong>privately</strong> remembered and enriched.</p>
+        <button id="googleSignInButton" class="button">
+          <span>Sign in with CarouselLabs</span>
+        </button>
+        <div id="errorContainer" style="display:none; margin-top: 15px; padding: 10px; background-color: #5a2d2d; border-radius: 5px;">
+          <p id="errorMessage" style="color: #ffcccc; margin: 0; font-size: 13px;"></p>
+          <button id="copyErrorButton" style="margin-top: 8px; font-size: 11px; padding: 3px 8px;">Copy Details</button>
+        </div>
+      </div>
+      <div id="signedInView" style="display:none">
+        <div class="signed-in-header">
+          <div class="user-info">
+            <div id="userName" style="font-weight:600; font-size:16px;">User</div>
+            <div id="tenantName" style="color:#D4D4D8; font-size:12px; margin-top:4px;">Tenant</div>
+          </div>
+          <button id="signOutButton" class="button button-secondary" style="width:auto; padding: 6px 12px; font-size: 12px; margin-top: 0;">Sign Out</button>
+        </div>
+
+        <div class="quick-save-section">
+          <div class="section-title">Quick Save</div>
+          <textarea id="quickSaveTextarea" placeholder="Paste text to save..."></textarea>
+          <button id="saveMemoryButton" class="button" style="margin-top: 8px;">Save Memory</button>
+        </div>
+
+        <div class="recommended-section">
+          <div class="section-title">Recommended Memories</div>
+          <ul id="memoryList" class="memory-list">
+            <!-- Loading state -->
+            <div id="loadingState">
+              <div class="loading-skeleton"></div>
+              <div class="loading-skeleton"></div>
+            </div>
+            <!-- Empty state -->
+            <div id="emptyState" style="display:none; text-align:center; color:#888; padding: 20px 0;">No memories found.</div>
+            <!-- Error state -->
+            <div id="errorState" style="display:none; text-align:center; color:#ff8080; padding: 20px 0;">
+              Error fetching memories. <a href="#" id="retryLink">Retry</a>
+            </div>
+          </ul>
+        </div>
+
+        <button id="openSidebarBtn" class="button" style="margin-top:20px;">Open Full View</button>
+        <button id="openSettingsBtn" class="button button-secondary" style="margin-top:10px;">Settings</button>
+      </div>
     </div>
     <script src="popup.js"></script>
   </body>

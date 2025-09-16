@@ -1,0 +1,22 @@
+MemLoop — NOTICE
+
+This project includes and modifies software originally from:
+
+  mem0ai / mem0-chrome-extension
+  License: MIT (see LICENSE)
+
+Modifications by Carousel Labs include (non-exhaustive):
+  - Branding, names, icons, and description updates for internal distribution
+  - Authentication changes: Cognito (Authorization Code + PKCE via chrome.identity.launchWebAuthFlow)
+  - Backend integration: CLabs gateway that fronts self-hosted Mem0
+  - Context enrichment: lightweight context capture (domain/route/page/env)
+  - Permissions tightening for MV3 and host permissions per targeted sites
+  - Telemetry routing to CLabs gateway (no third‑party analytics)
+
+Copyright (c) 2025 Carousel Labs. All rights reserved.
+
+The original work remains © its respective authors under the MIT License. See the LICENSE file for details.
+
+
+
+

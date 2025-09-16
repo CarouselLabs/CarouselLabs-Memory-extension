@@ -1,0 +1,70 @@
+name: Build Chrome Extension
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        stage: [dev, staging, prod]
+    env:
+      AWS_REGION: eu-west-1
+      STAGE: ${{ matrix.stage }}
+      TENANT: carousel-labs
+
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Configure AWS for SSM parameter access (per unified guide)
+      - name: Configure AWS (CodeArtifact pull role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.CODEARTIFACT_PULL_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Build config from SSM (unified guide pattern)
+      - name: Build config from SSM
+        run: |
+          set -euo pipefail
+          ./scripts/build-config.sh "$STAGE" "$AWS_REGION" "$TENANT"
+
+      # Package extension per stage
+      - name: Package extension
+        run: |
+          set -euo pipefail
+          # Create dist directory
+          mkdir -p dist
+          
+          # Copy extension files
+          cp -r manifest.json popup.* settings.* sidebar.js sw.js utils/ themes/ icons/ config/ dist/
+          
+          # Create versioned zip
+          cd dist
+          zip -r "../chrome-extension-$STAGE.zip" .
+          cd ..
+
+      # Upload artifacts
+      - name: Upload extension artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chrome-extension-${{ matrix.stage }}
+          path: chrome-extension-${{ matrix.stage }}.zip
+          retention-days: 30
+
+
+
+
+

@@ -15,20 +15,31 @@ async function load(){
     'memory_enabled','telemetry_opt_out','domain_blacklist',
     'theme_name'
   ]);
-  document.getElementById('selected_env').value = d.selected_env || 'prod';
-  document.getElementById('gateway_base_url_dev').value = d.gateway_base_url_dev || '';
-  document.getElementById('gateway_base_url_staging').value = d.gateway_base_url_staging || '';
-  document.getElementById('gateway_base_url_prod').value = d.gateway_base_url_prod || 'https://api.carousellabs.co/mem0';
+  document.getElementById('selected_env').value = d.selected_env || 'dev';
+  const defaultDev = 'https://api.dev.carousellabs.co/mem0';
+  const defaultStaging = 'https://api.staging.carousellabs.co/mem0';
+  const defaultProd = 'https://api.carousellabs.co/mem0';
+  const vDev = d.gateway_base_url_dev || defaultDev;
+  const vStaging = d.gateway_base_url_staging || defaultStaging;
+  const vProd = d.gateway_base_url_prod || defaultProd;
+  document.getElementById('gateway_base_url_dev').value = vDev;
+  document.getElementById('gateway_base_url_staging').value = vStaging;
+  document.getElementById('gateway_base_url_prod').value = vProd;
   // Pre-populate auth fields
-  const env = (d.selected_env || 'prod');
+  const env = (d.selected_env || 'dev');
   const baseByEnv = {
-    dev: d.gateway_base_url_dev,
-    staging: d.gateway_base_url_staging,
-    prod: d.gateway_base_url_prod || 'https://api.carousellabs.co/mem0'
+    dev: vDev,
+    staging: vStaging,
+    prod: vProd
   };
   const baseUrl = baseByEnv[env];
   const derivedExchange = (()=>{ try{ if(!baseUrl) return ''; const u = new URL(baseUrl); return `${u.origin}/auth/exchange`; }catch{ return ''; } })();
   document.getElementById('auth_exchange_url').value = d.auth_exchange_url || derivedExchange || '';
+  // Show chrome redirect URL for convenience
+  try {
+    const redirect = chrome.identity && chrome.identity.getRedirectURL ? chrome.identity.getRedirectURL() : '';
+    const rd = document.getElementById('chrome_redirect_url'); if (rd) rd.value = redirect || '';
+  } catch (_) {}
   // Use env-scoped saved values if present; otherwise keep existing/global
   const domainByEnv = { dev: d.cognito_domain_dev, staging: d.cognito_domain_staging, prod: d.cognito_domain_prod };
   const clientByEnv = { dev: d.cognito_client_id_dev, staging: d.cognito_client_id_staging, prod: d.cognito_client_id_prod };
@@ -41,6 +52,13 @@ async function load(){
   if (document.getElementById('theme_name')) {
     document.getElementById('theme_name').value = d.theme_name || 'dark';
   }
+  // Persist defaults on first load if missing
+  const toPersist = {};
+  if (!d.gateway_base_url_dev) toPersist.gateway_base_url_dev = vDev;
+  if (!d.gateway_base_url_staging) toPersist.gateway_base_url_staging = vStaging;
+  if (!d.gateway_base_url_prod) toPersist.gateway_base_url_prod = vProd;
+  if (!d.selected_env) toPersist.selected_env = 'dev';
+  if (Object.keys(toPersist).length) { await setSync(toPersist); }
 }
 
 async function fetchAndPopulateConfigIfMissing() {
@@ -50,17 +68,18 @@ async function fetchAndPopulateConfigIfMissing() {
     const exg = document.getElementById('auth_exchange_url');
     if (dom.value && cid.value && exg.value) return; // already set
     await (async ()=>{
-      const env = document.getElementById('selected_env').value;
-      const d = await getSync(['gateway_base_url_dev','gateway_base_url_staging','gateway_base_url_prod']);
-      const baseByEnv = { dev: d.gateway_base_url_dev, staging: d.gateway_base_url_staging, prod: d.gateway_base_url_prod };
-      const base = baseByEnv[env] || d.gateway_base_url_prod || '';
-      if (!base) return;
-      const origin = (()=>{ try{ return new URL(base).origin; }catch{ return base.replace(/\/$/, ''); } })();
+      let origin = '';
+      try {
+        const envMod = await import(chrome.runtime.getURL('utils/env_config.js'));
+        const base = envMod && envMod.resolveGatewayBaseUrl ? await envMod.resolveGatewayBaseUrl() : null;
+        if (base) origin = new URL(base).origin;
+      } catch (_) {}
+      if (!origin) origin = 'https://api.dev.carousellabs.co';
       const urls = [
         `${origin}/config/memloop`,
         `${origin}/memloop/config`,
-        `${origin}/tf/${env}/carousel-labs/memloop/config`,
-        `${origin}/tf/${env}/carousel-labs/memloop/cognito_config`
+        `${origin}/gateway/mem0/config`,
+        `${origin}/auth/config`
       ];
       let payload = null;
       for (const u of urls) {
@@ -69,9 +88,11 @@ async function fetchAndPopulateConfigIfMissing() {
       if (!payload) return;
       const cc = payload.cognito_config || payload;
       const gc = payload.gateway_config || null;
-      if (cc && cc.domain && !dom.value) dom.value = cc.domain;
-      if (cc && (cc.client_id || cc.clientId) && !cid.value) cid.value = cc.client_id || cc.clientId;
-      if (gc && gc.auth_exchange_url && !exg.value) exg.value = gc.auth_exchange_url;
+      if (cc && (cc.domain || cc.cognito_domain) && !dom.value) dom.value = (cc.cognito_domain || cc.domain || '').replace(/^https?:\/\//,'');
+      if (cc && (cc.client_id || cc.clientId || cc.cognito_client_id) && !cid.value) cid.value = cc.cognito_client_id || cc.client_id || cc.clientId;
+      if (!exg.value) {
+        exg.value = (gc && gc.auth_exchange_url) ? gc.auth_exchange_url : `${origin}/auth/exchange`;
+      }
     })();
   } catch (_) {}
 }
@@ -103,6 +124,68 @@ async function bind(){
   if (document.getElementById('fetch_config')) {
     document.getElementById('fetch_config').addEventListener('click', async ()=>{
       await fetchAndPopulateConfigIfMissing();
+      const st = document.getElementById('auth_status'); if (st) st.textContent = 'Fetched from gateway (discovery)';
+    });
+  }
+  if (document.getElementById('load_baked')) {
+    document.getElementById('load_baked').addEventListener('click', async ()=>{
+      try {
+        const url = chrome.runtime.getURL('config/auth.defaults.json');
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error('missing_baked_defaults');
+        const j = await res.json();
+        const dom = document.getElementById('cognito_domain');
+        const cid = document.getElementById('cognito_client_id');
+        const exg = document.getElementById('auth_exchange_url');
+        dom.value = (j.cognito_domain || j.domain || '').replace(/^https?:\/\//,'');
+        cid.value = j.cognito_client_id || j.client_id || '';
+        exg.value = j.auth_exchange_url || j.exchange_url || j.token_url || exg.value;
+        const st = document.getElementById('auth_status'); if (st) st.textContent = 'Loaded baked defaults';
+      } catch (e) {
+        const st = document.getElementById('auth_status'); if (st) st.textContent = 'No baked defaults found';
+      }
+    });
+  }
+  if (document.getElementById('rerun_discovery')) {
+    document.getElementById('rerun_discovery').addEventListener('click', async ()=>{
+      try {
+        const mod = await import(chrome.runtime.getURL('utils/auto_config.js'));
+        if (mod && mod.ensureAuthConfig) {
+          const r = await mod.ensureAuthConfig();
+          const st = document.getElementById('auth_status'); if (st) st.textContent = `Discovery: ${r && r.source ? r.source : 'unknown'}`;
+          await load();
+        }
+      } catch (_) {
+        const st = document.getElementById('auth_status'); if (st) st.textContent = 'Discovery failed';
+      }
+    });
+  }
+  // Copy redirect URL
+  if (document.getElementById('copy_redirect_url')) {
+    document.getElementById('copy_redirect_url').addEventListener('click', async ()=>{
+      try {
+        const el = document.getElementById('chrome_redirect_url');
+        if (el && el.value) { await navigator.clipboard.writeText(el.value); const st = document.getElementById('auth_status'); if (st) st.textContent = 'Redirect URL copied'; }
+      } catch (_) {}
+    });
+  }
+  // Test Hosted UI button
+  if (document.getElementById('test_auth')) {
+    document.getElementById('test_auth').addEventListener('click', async ()=>{
+      try {
+        const domain = document.getElementById('cognito_domain').value.trim();
+        const clientId = document.getElementById('cognito_client_id').value.trim();
+        const redirect = document.getElementById('chrome_redirect_url').value.trim();
+        if (!domain || !clientId || !redirect) { const st = document.getElementById('auth_status'); if (st) st.textContent = 'Fill domain/client and have redirect visible'; return; }
+        const params = new URLSearchParams({
+          response_type: 'code',
+          client_id: clientId,
+          redirect_uri: redirect,
+          scope: 'openid email profile'
+        });
+        const url = `https://${domain.replace(/^https?:\/\//,'')}/oauth2/authorize?${params.toString()}`;
+        chrome.tabs.create({ url });
+      } catch (_) {}
     });
   }
   document.getElementById('clear_token').addEventListener('click', async ()=>{
@@ -158,7 +241,18 @@ async function bind(){
   });
 }
 
-document.addEventListener('DOMContentLoaded', ()=>{ load().then(async ()=>{ await fetchAndPopulateConfigIfMissing(); await bind(); }); });
+document.addEventListener('DOMContentLoaded', ()=>{
+  try { document.documentElement.setAttribute('data-theme','carousel-labs'); } catch {}
+  (async ()=>{
+    try {
+      const auto = await import(chrome.runtime.getURL('utils/auto_config.js')).catch(()=>null);
+      if (auto && auto.ensureAuthConfig) { await auto.ensureAuthConfig(); }
+    } catch (_) {}
+    await load();
+    await fetchAndPopulateConfigIfMissing();
+    await bind();
+  })();
+});
 
 
 

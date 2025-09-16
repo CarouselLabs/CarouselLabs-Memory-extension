@@ -20,60 +20,49 @@ let inputValueCopy = "";
 
 let currentModalSourceButtonId = null; 
 
-  var chatgptSearch = OPENMEMORY_SEARCH.createOrchestrator({
+  var chatgptSearch = MEMLOOP_SEARCH.createOrchestrator({
     fetch: async function(query, opts) {
-      const data = await new Promise((resolve) => {
-        chrome.storage.sync.get(
-          ["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"],
-          function (items) { resolve(items); }
-        );
-      });
-  
-      const apiKey = data.apiKey;
-      const accessToken = data.access_token;
-      if (!apiKey && !accessToken) return [];
-  
-      const authHeader = accessToken ? `Bearer ${accessToken}` : `Token ${apiKey}`;
-      const userId = data.userId || data.user_id || "chrome-extension-user";
-      const threshold = (data.similarity_threshold !== undefined) ? data.similarity_threshold : 0.1;
-      const topK = (data.top_k !== undefined) ? data.top_k : 10;
-  
-      const optionalParams = {};
-      if (data.selected_org) optionalParams.org_id = data.selected_org;
-      if (data.selected_project) optionalParams.project_id = data.selected_project;
-  
-      const payload = {
-        query,
-        filters: { user_id: userId },
-        rerank: true,
-        threshold: threshold,
-        top_k: topK,
-        filter_memories: false,
-        source: "OPENMEMORY_CHROME_EXTENSION",
-        ...optionalParams,
+      const auth = await import(chrome.runtime.getURL('utils/auth.js'));
+      const gateway = await import(chrome.runtime.getURL('utils/mem0_gateway.js'));
+      
+      const token = await auth.getAccessToken();
+      if (!token) return [];
+
+      // Get context for the current tab
+      const contextScope = await import(chrome.runtime.getURL('utils/context_scope_adapter.js'));
+      const context = await contextScope.getContext({});
+      
+      const searchParams = {
+        q: query,
+        domain: context.domain?.name,
+        pathPrefix: context.route?.path,
+        tags: context.tags?.join(','),
+        limit: 10,
+        offset: 0,
       };
-  
-      const res = await fetch("https://api.mem0.ai/v2/memories/search/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: authHeader,
-        },
-        body: JSON.stringify(payload),
-        signal: opts && opts.signal
-      });
-  
-      if (!res.ok) throw new Error(`API request failed with status ${res.status}`);
-      return await res.json();
+      
+      return gateway.searchMemories(searchParams);
     },
   
-    // Don’t render on prefetch. When modal is open, update it.
-    onSuccess: function(normQuery, responseData) {
+    // Don't render on prefetch. When modal is open, update it.
+    onSuccess: async function(normQuery, responseData) {
       if (!memoryModalShown) return;
-      const memoryItems = (responseData || []).map(item => ({
+      
+      const ranking = await import(chrome.runtime.getURL('utils/ranking.js'));
+      const contextScope = await import(chrome.runtime.getURL('utils/context_scope_adapter.js'));
+      const context = await contextScope.getContext({});
+      
+      const rankedItems = ranking.rankAndSort(responseData.items || [], {
+        q: normQuery,
+        domain: context.domain?.name,
+        pathPrefix: context.route?.path,
+      });
+
+      const memoryItems = (rankedItems || []).map(item => ({
         id: item.id,
-        text: item.memory,
-        categories: item.categories || []
+        text: item.text,
+        score: item.score,
+        categories: item.metadata?.tags || []
       }));
       createMemoryModal(memoryItems, false, currentModalSourceButtonId);
     },
@@ -91,6 +80,14 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   // Close existing modal if it exists
   if (memoryModalShown && currentModalOverlay) {
     document.body.removeChild(currentModalOverlay);
+  }
+
+  // Emit telemetry event
+  if (!isLoading) {
+    (async () => {
+      const telemetry = await import(chrome.runtime.getURL('utils/telemetry.js'));
+      telemetry.emit('memory_shown', { count: memoryItems.length, provider: 'chatgpt' });
+    })();
   }
 
   memoryModalShown = true;
@@ -274,9 +271,9 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     align-items: center;
   `;
 
-  // Add Mem0 logo (updated to SVG)
+  // Add MemLoop logo
   const logoImg = document.createElement('img');
-  logoImg.src = chrome.runtime.getURL("icons/mem0-claude-icon.png");
+  logoImg.src = chrome.runtime.getURL("icons/CLabs_Logo_Beaker-BlackOnWhite_v2.svg");
   logoImg.style.cssText = `
     width: 26px;
     height: 26px;
@@ -284,9 +281,9 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     margin-right: 8px;
   `;
 
-  // Add "OpenMemory" title
+  // Add "MemLoop" title
   const title = document.createElement('div');
-  title.textContent = "OpenMemory";
+  title.textContent = "MemLoop";
   title.style.cssText = `
     font-size: 16px;
     font-weight: 600;
@@ -631,6 +628,15 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
       `;
       memoryText.textContent = memory.text;
 
+      const memoryScore = document.createElement('div');
+      memoryScore.style.cssText = `
+        font-size: 10px;
+        color: #A1A1AA;
+        margin-top: 4px;
+        font-family: monospace;
+      `;
+      memoryScore.textContent = `Score: ${memory.score.toFixed(2)}`;
+
       const actionsContainer = document.createElement('div');
       actionsContainer.style.cssText = `
         display: flex;
@@ -659,9 +665,14 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
       addButton.addEventListener('click', (e) => {
         e.stopPropagation();
 
+        (async () => {
+          const telemetry = await import(chrome.runtime.getURL('utils/telemetry.js'));
+          telemetry.emit('insert_clicked', { memory_id: memory.id, provider: 'chatgpt' });
+        })();
+
         sendExtensionEvent("memory_injection", {
           provider: "chatgpt",
-          source: "OPENMEMORY_CHROME_EXTENSION",
+          source: "MEMLOOP_CHROME_EXTENSION",
           browser: getBrowser(),
           injected_all: false,
           memory_id: memory.id
@@ -812,6 +823,8 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
       actionsContainer.appendChild(menuButton);
       
       memoryContainer.appendChild(contentWrapper);
+      contentWrapper.appendChild(memoryText);
+      contentWrapper.appendChild(memoryScore);
       memoryContainer.appendChild(actionsContainer);
       memoriesContent.appendChild(memoryContainer);
 
@@ -1020,9 +1033,14 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
         return memory.text;
       });
 
+    (async () => {
+      const telemetry = await import(chrome.runtime.getURL('utils/telemetry.js'));
+      telemetry.emit('insert_clicked', { count: newMemories.length, all: true, provider: 'chatgpt' });
+    })();
+
     sendExtensionEvent("memory_injection", {
       provider: "chatgpt",
-      source: "OPENMEMORY_CHROME_EXTENSION",
+      source: "MEMLOOP_CHROME_EXTENSION",
       browser: getBrowser(),
       injected_all: true,
       memory_count: newMemories.length
@@ -1088,7 +1106,7 @@ function updateInputWithMemories() {
     // Create the memory wrapper with all collected memories
     let memoriesContent =
       '<div id="mem0-wrapper" contenteditable="false" style="background-color: rgb(220, 252, 231); padding: 8px; border-radius: 4px; margin-top: 8px; margin-bottom: 8px;">';
-    memoriesContent += OPENMEMORY_PROMPTS.memory_header_html_strong;
+    memoriesContent += MEMLOOP_PROMPTS.memory_header_html_strong;
     
     // Add all memories to the content
     allMemories.forEach((mem, idx) => {
@@ -1140,8 +1158,8 @@ function getContentWithoutMemories(message) {
   
   // Remove any memory headers using shared prompts (HTML and plain variants)
   try {
-    const MEM0_PLAIN = OPENMEMORY_PROMPTS.memory_header_plain_regex;
-    const MEM0_HTML = OPENMEMORY_PROMPTS.memory_header_html_regex;
+    const MEM0_PLAIN = MEMLOOP_PROMPTS.memory_header_plain_regex;
+    const MEM0_HTML = MEMLOOP_PROMPTS.memory_header_html_regex;
     content = content.replace(MEM0_HTML, "");
     content = content.replace(MEM0_PLAIN, "");
   } catch (_e) {}
@@ -1196,13 +1214,12 @@ function addSendButtonListener() {
 }
 
 // Function to capture and store memory asynchronously
-function captureAndStoreMemory() {
+async function captureAndStoreMemory() {
   // Get the message content
-  // id is prompt-textarea
   const inputElement = document.querySelector('#prompt-textarea') ||
-  document.querySelector('div[contenteditable="true"]') || 
-  document.querySelector("textarea") ||
-  document.querySelector('textarea[data-virtualkeyboard="true"]');
+    document.querySelector('div[contenteditable="true"]') || 
+    document.querySelector("textarea") ||
+    document.querySelector('textarea[data-virtualkeyboard="true"]');
 
   if (!inputElement) return;
   
@@ -1221,57 +1238,44 @@ function captureAndStoreMemory() {
   // Skip if message is empty after cleaning
   if (!message || message.trim() === '') return;
   
-  // Asynchronously store the memory
-  chrome.storage.sync.get(
-    ["apiKey", "userId", "access_token", "memory_enabled", "selected_org", "selected_project", "user_id"],
-    function (items) {
-      // Skip if memory is disabled or no credentials
-      if (items.memory_enabled === false || (!items.apiKey && !items.access_token)) {
-        return;
-      }
-      
-      const authHeader = items.access_token
-        ? `Bearer ${items.access_token}`
-        : `Token ${items.apiKey}`;
-      
-      const userId = items.userId || items.user_id || "chrome-extension-user";
-      
-      // Get recent messages for context (if available)
-      const messages = getLastMessages(2);
-      messages.push({ role: "user", content: message });
+  try {
+    const auth = await import(chrome.runtime.getURL('utils/auth.js'));
+    const token = await auth.getAccessToken();
+    if (!token) return; // Not signed in, do nothing
 
-      const optionalParams = {}
-      if(items.selected_org) {
-        optionalParams.org_id = items.selected_org;
-      }
-      if(items.selected_project) {
-        optionalParams.project_id = items.selected_project;
-      }
-      
-      // Send memory to mem0 API asynchronously without waiting for response
-      const storagePayload = {
-        messages: messages,
-        user_id: userId,
-        infer: true,
-        metadata: {
-          provider: "ChatGPT",
-        },
-        source: "OPENMEMORY_CHROME_EXTENSION",
-        ...optionalParams,
-      };
-      
-      fetch("https://api.mem0.ai/v1/memories/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: authHeader,
-        },
-        body: JSON.stringify(storagePayload),
-      }).catch((error) => {
-        console.error("Error saving memory:", error);
-      });
+    const settings = await new Promise(r => chrome.storage.sync.get(["memory_enabled", "domainBlacklist"], items => r(items || {})));
+    if (settings.memory_enabled === false) return;
+    
+    const url = window.location.href;
+    if (settings.domainBlacklist && settings.domainBlacklist.some(d => url.includes(d))) {
+      return; // Domain is blacklisted
     }
-  );
+
+    const gateway = await import(chrome.runtime.getURL('utils/mem0_gateway.js'));
+    const contextScope = await import(chrome.runtime.getURL('utils/context_scope_adapter.js'));
+    const telemetry = await import(chrome.runtime.getURL('utils/telemetry.js'));
+
+    const context = await contextScope.getContext({});
+    
+    const messages = getLastMessages(2);
+    messages.push({ role: "user", content: message });
+
+    const body = {
+      messages: messages,
+      metadata: {
+        provider: "ChatGPT",
+        context: context,
+        tags: context.tags,
+      },
+      source: "MEMLOOP_CHROME_EXTENSION",
+    };
+    
+    await gateway.saveMemory(body);
+    await telemetry.emit('memory_saved', { provider: 'chatgpt', source: 'MEMLOOP_CHROME_EXTENSION' });
+
+  } catch (error) {
+    console.error("MemLoop: Error saving memory:", error);
+  }
 }
 
 // Function to add the Mem0 button next to the mic icon
@@ -1421,11 +1425,15 @@ async function addMem0IconButton() {
   }
   
   // Strategy 3: Fallback - create our own container
-  if (!buttonContainer && inputElement) {
+  if (!buttonContainer) {
+    // Find input element locally and derive a container
+    const _inputEl = document.querySelector('#prompt-textarea') ||
+      document.querySelector('div[contenteditable="true"]') ||
+      document.querySelector("textarea");
     // Find the closest form or container element
-    let formContainer = inputElement.closest('form') || 
-                       inputElement.closest('div[role="group"]') ||
-                       inputElement.parentElement;
+    let formContainer = _inputEl && (_inputEl.closest('form') || 
+                       _inputEl.closest('div[role="group"]') ||
+                       _inputEl.parentElement);
     
     if (formContainer) {
       buttonContainer = formContainer;
@@ -1436,11 +1444,11 @@ async function addMem0IconButton() {
   
   // Final fallback: Create a floating button if no container found
   if (!buttonContainer) {
-    const inputElement = document.querySelector('#prompt-textarea') ||
+    const _inputEl2 = document.querySelector('#prompt-textarea') ||
       document.querySelector('div[contenteditable="true"]') ||
       document.querySelector("textarea");
       
-    if (inputElement) {
+    if (_inputEl2) {
       // Create a custom floating container
       buttonContainer = document.createElement('div');
       buttonContainer.id = 'mem0-floating-container';
@@ -1466,8 +1474,9 @@ async function addMem0IconButton() {
       buttonStyles = referenceButton.className;
     }
     
-    if (true) { // Always execute the button creation now that we have a container
+    { // Always execute the button creation now that we have a container
       const mem0ButtonContainer = document.createElement('span');
+      mem0ButtonContainer.id = 'mem0-floating-container';
       mem0ButtonContainer.className = '';
       mem0ButtonContainer.dataset.state = 'closed';
       mem0ButtonContainer.style.position = 'relative'; // Add position relative for popover positioning
@@ -1503,11 +1512,12 @@ async function addMem0IconButton() {
         }
       }
       
-      const mem0Button = document.createElement('button');
+      const mem0Button = document.createElement('div');
       mem0Button.id = 'mem0-icon-button';
       mem0Button.className = buttonStyles;
-      mem0Button.setAttribute('aria-label', 'OpenMemory button');
-      mem0Button.type = 'button';
+      mem0Button.setAttribute('aria-label', 'MemLoop button');
+      mem0Button.setAttribute('role', 'button');
+      mem0Button.setAttribute('tabindex', '0');
       
       // Ensure consistent button styling regardless of inherited classes
       mem0Button.style.cssText = `
@@ -1600,7 +1610,7 @@ async function addMem0IconButton() {
       iconContainer.className = 'flex items-center justify-center';
       
       const icon = document.createElement('img');
-      icon.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
+      icon.src = chrome.runtime.getURL('icons/CLabs_Logo_Beaker-BlackOnWhite_v2.svg');
       icon.className = 'h-[18px] w-[18px]';
       icon.style.borderRadius = '50%';
       
@@ -1609,50 +1619,23 @@ async function addMem0IconButton() {
       mem0Button.appendChild(notificationDot);
       mem0ButtonContainer.appendChild(mem0Button);
       
-      // Insert the button container with proper positioning and spacing
-      if (microphoneButton && buttonContainer.contains(microphoneButton)) {
-        // For Dictate button, we need to find the right insertion point
-        // The button is nested: container > span[data-state] > button
-        let insertionTarget = microphoneButton;
-        let insertionParent = buttonContainer;
-        
-        // If the microphone button is nested in spans, find the top-level span in our container
-        let currentElement = microphoneButton.parentElement;
-        while (currentElement && currentElement !== buttonContainer && currentElement.parentElement === buttonContainer) {
-          insertionTarget = currentElement;
-          break;
-        }
-        while (currentElement && currentElement !== buttonContainer) {
-          if (currentElement.parentElement === buttonContainer) {
-            insertionTarget = currentElement;
-            break;
-          }
-          currentElement = currentElement.parentElement;
-        }
-        
-        // Insert BEFORE the target element (to the left of the microphone)
-        insertionParent.insertBefore(mem0ButtonContainer, insertionTarget);
-        
-        // Add proper spacing to match other elements in the container
-        mem0ButtonContainer.style.marginRight = '0px'; // Let the container handle spacing
-        mem0ButtonContainer.style.display = 'inline-flex';
-        mem0ButtonContainer.style.alignItems = 'center';
-      } else if (referenceButton && buttonContainer.contains(referenceButton)) {
-        // Insert next to the reference button  
-        if (referenceButton.nextSibling) {
-          buttonContainer.insertBefore(mem0ButtonContainer, referenceButton.nextSibling);
-        } else {
-          buttonContainer.appendChild(mem0ButtonContainer);
-        }
-        mem0ButtonContainer.style.marginLeft = '4px';
-        mem0ButtonContainer.style.display = 'inline-flex';
-        mem0ButtonContainer.style.alignItems = 'center';
+      // Avoid mutating ChatGPT's React DOM – render as overlay anchored near the input
+      const inputEl = document.querySelector('#prompt-textarea') || document.querySelector('div[contenteditable="true"]') || document.querySelector('textarea');
+      const anchorRect = (buttonContainer && buttonContainer.getBoundingClientRect()) || (inputEl && inputEl.getBoundingClientRect()) || null;
+      document.body.appendChild(mem0ButtonContainer);
+      mem0ButtonContainer.style.position = 'fixed';
+      mem0ButtonContainer.style.zIndex = '2147483647';
+      mem0ButtonContainer.style.display = 'inline-flex';
+      mem0ButtonContainer.style.alignItems = 'center';
+      mem0ButtonContainer.style.pointerEvents = 'auto';
+      if (anchorRect) {
+        // Bottom-left of input area to avoid Grammarly bubble on the right
+        mem0ButtonContainer.style.left = Math.max(8, anchorRect.left + 8) + 'px';
+        mem0ButtonContainer.style.top = Math.max(8, anchorRect.bottom - 40) + 'px';
       } else {
-        // Insert at the end of the button container with fallback styling
-        buttonContainer.appendChild(mem0ButtonContainer);
-        mem0ButtonContainer.style.marginLeft = '4px';
-        mem0ButtonContainer.style.display = 'inline-flex';
-        mem0ButtonContainer.style.alignItems = 'center';
+        // Fallback bottom-right
+        mem0ButtonContainer.style.right = '24px';
+        mem0ButtonContainer.style.bottom = '96px';
       }
       
       // Add hover event for popover
@@ -1762,18 +1745,12 @@ async function handleMem0Modal(sourceButtonId = null) {
     return;
   }
 
-  // Check if user is logged in
-  const loginData = await new Promise((resolve) => {
-    chrome.storage.sync.get(
-      ["apiKey", "userId", "access_token"],
-      function (items) {
-        resolve(items);
-      }
-    );
-  });
+  // Check if user is logged in via our auth util
+  const auth = await import(chrome.runtime.getURL('utils/auth.js'));
+  const token = await auth.getAccessToken();
 
-  // If no API key and no access token, show login popup
-  if (!loginData.apiKey && !loginData.access_token) {
+  // If no token, show login popup
+  if (!token) {
     showLoginPopup();
     return;
   }
@@ -1794,7 +1771,7 @@ async function handleMem0Modal(sourceButtonId = null) {
   }
 
   try {
-    const MEM0_PLAIN = OPENMEMORY_PROMPTS.memory_header_plain_regex;
+    const MEM0_PLAIN = MEMLOOP_PROMPTS.memory_header_plain_regex;
     message = message.replace(MEM0_PLAIN, "").trim();
   } catch (_e) {}
   const endIndex = message.indexOf("</p>");
@@ -1812,46 +1789,11 @@ async function handleMem0Modal(sourceButtonId = null) {
   createMemoryModal([], true, sourceButtonId);
 
   try {
-    const data = await new Promise((resolve) => {
-      chrome.storage.sync.get(
-        ["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"],
-        function (items) {
-          resolve(items);
-        }
-      );
-    });
-
-    const apiKey = data.apiKey;
-    const userId = data.userId || data.user_id || "chrome-extension-user";
-    const accessToken = data.access_token;
-    const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.1;
-    const topK = data.top_k !== undefined ? data.top_k : 10;
-
-    if (!apiKey && !accessToken) {
-      isProcessingMem0 = false;
-      return;
-    }
-
     sendExtensionEvent("modal_clicked", {
       provider: "chatgpt",
-      source: "OPENMEMORY_CHROME_EXTENSION",
+      source: "MEMLOOP_CHROME_EXTENSION",
       browser: getBrowser()
     });
-
-    const authHeader = accessToken
-      ? `Bearer ${accessToken}`
-      : `Token ${apiKey}`;
-
-    const messages = getLastMessages(2);
-    messages.push({ role: "user", content: message });
-
-    const optionalParams = {}
-    if(data.selected_org) {
-      optionalParams.org_id = data.selected_org;
-    }
-    if(data.selected_project) {
-      optionalParams.project_id = data.selected_project;
-    }
 
     currentModalSourceButtonId = sourceButtonId; 
     chatgptSearch.runImmediate(message); 
@@ -2056,7 +1998,7 @@ function addSyncButton() {
       syncButton.style.marginRight = "8px";
 
       const syncIcon = document.createElement("img");
-      syncIcon.src = chrome.runtime.getURL("icons/mem0-claude-icon.png");
+      syncIcon.src = chrome.runtime.getURL("icons/CLabs_Logo_Beaker-BlackOnWhite_v2.svg");
       syncIcon.style.width = "16px";
       syncIcon.style.height = "16px";
       syncIcon.style.marginRight = "8px";
@@ -2221,7 +2163,7 @@ function sendMemoriesToMem0(memories) {
               metadata: {
                 provider: "ChatGPT",
               },
-              source: "OPENMEMORY_CHROME_EXTENSION",
+              source: "MEMLOOP_CHROME_EXTENSION",
               ...optionalParams,
             }),
           })
@@ -2328,7 +2270,7 @@ function sendMemoryToMem0(memory, infer = true) {
               metadata: {
                 provider: "ChatGPT",
               },
-              source: "OPENMEMORY_CHROME_EXTENSION",
+              source: "MEMLOOP_CHROME_EXTENSION",
               ...optionalParams,
             }),
           })
@@ -2362,6 +2304,14 @@ function getMemoryEnabledState() {
 
 // Update the initialization function to add the Mem0 icon button but not intercept Enter key
 function initializeMem0Integration() {
+  // Replace old `OPENMEMORY_PROMPTS` with `MEMLOOP_PROMPTS`
+  if (typeof OPENMEMORY_PROMPTS !== 'undefined') {
+    window.MEMLOOP_PROMPTS = OPENMEMORY_PROMPTS;
+  }
+  if (typeof OPENMEMORY_SEARCH !== 'undefined') {
+    window.MEMLOOP_SEARCH = OPENMEMORY_SEARCH;
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     addSyncButton();
     (async () => await addMem0IconButton())();
@@ -2472,7 +2422,7 @@ function showLoginPopup() {
   `;
   
   const logo = document.createElement('img');
-  logo.src = chrome.runtime.getURL("icons/mem0-claude-icon.png");
+  logo.src = chrome.runtime.getURL("icons/CLabs_Logo_Beaker-BlackOnWhite_v2.svg");
   logo.style.cssText = `
     width: 24px;
     height: 24px;
@@ -2481,7 +2431,7 @@ function showLoginPopup() {
   `;
 
   const logoDark = document.createElement('img');
-  logoDark.src = chrome.runtime.getURL("icons/mem0-icon-black.png");
+  logoDark.src = chrome.runtime.getURL("icons/CLabs_Logo_Beaker-BlackOnWhite_v2.svg");
   logoDark.style.cssText = `
     width: 24px;
     height: 24px;
@@ -2490,11 +2440,12 @@ function showLoginPopup() {
   `;
   
   const heading = document.createElement('h2');
-  heading.textContent = 'Sign in to OpenMemory';
+  heading.textContent = 'Sign in to MemLoop';
   heading.style.cssText = `
     margin: 0;
     font-size: 18px;
     font-weight: 600;
+    color: var(--color-text-primary, #E1E1E3);
   `;
   
   logoContainer.appendChild(heading);
@@ -2504,7 +2455,7 @@ function showLoginPopup() {
   message.textContent = 'Please sign in to access your memories and personalize your conversations!';
   message.style.cssText = `
     margin-bottom: 24px;
-    color: #D4D4D8;
+    color: var(--color-text-secondary, #D4D4D8);
     font-size: 14px;
     line-height: 1.5;
     text-align: center;
@@ -2518,8 +2469,8 @@ function showLoginPopup() {
     justify-content: center;
     width: 100%;
     padding: 10px;
-    background-color: white;
-    color: black;
+    background-color: var(--color-primary, #4DB9A5);
+    color: var(--color-background, #131416);
     border: none;
     border-radius: 8px;
     font-size: 14px;
@@ -2530,23 +2481,32 @@ function showLoginPopup() {
   
   // Add text in span for better centering
   const signInText = document.createElement('span');
-  signInText.textContent = 'Sign in with Mem0';
+  signInText.textContent = 'Sign in';
   
   signInButton.appendChild(logoDark);
   signInButton.appendChild(signInText);
   
   signInButton.addEventListener('mouseenter', () => {
-    signInButton.style.backgroundColor = '#f5f5f5';
+    signInButton.style.backgroundColor = 'var(--color-secondary, #22D3EE)';
   });
-  
   signInButton.addEventListener('mouseleave', () => {
-    signInButton.style.backgroundColor = 'white';
+    signInButton.style.backgroundColor = 'var(--color-primary, #4DB9A5)';
   });
   
-  // Open sign-in page when clicked
-  signInButton.addEventListener('click', () => {
-    window.open('https://app.mem0.ai/login', '_blank');
-    document.body.removeChild(popupOverlay);
+  // Start Cognito sign-in via background (content scripts cannot call identity API)
+  signInButton.addEventListener('click', async () => {
+    try {
+      await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: 'memloop_signin' }, (resp) => {
+          if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
+          if (!resp || !resp.ok) { reject(new Error((resp && resp.error) || 'signin_failed')); return; }
+          resolve(true);
+        });
+      });
+      document.body.removeChild(popupOverlay);
+    } catch (e) {
+      console.warn('MemLoop signin failed:', e);
+    }
   });
   
   // Assemble popup

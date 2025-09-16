@@ -1,7 +1,7 @@
 var OPENMEMORY_PROMPTS = (typeof OPENMEMORY_PROMPTS !== 'undefined') ? OPENMEMORY_PROMPTS : {};
 
 OPENMEMORY_PROMPTS.rerank_system_prompt = `
-You are OpenMemory Filterer.
+You are MemLoop Filterer.
 
 Your tasks:
 1) From the provided candidate memories, select ONLY those that materially help answer the user query.

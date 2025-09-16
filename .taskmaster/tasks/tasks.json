@@ -1,0 +1,807 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Setup Project Repository",
+        "description": "Create a private repository for the CarouselLabs Memory Extension, import the upstream code, and preserve the MIT license and NOTICE file.",
+        "details": "1. Create a new private repository on GitHub or equivalent platform. 2. Import the upstream mem0ai/mem0-chrome-extension codebase. 3. Ensure the LICENSE file is included and add a NOTICE file with appropriate content.",
+        "testStrategy": "Verify repository creation and file integrity by checking for the presence of the LICENSE and NOTICE files.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create Private Repository",
+            "description": "Create a new private repository on GitHub or an equivalent platform for the CarouselLabs Memory Extension.",
+            "dependencies": [],
+            "details": "Log in to GitHub, navigate to the repository creation page, and set the repository to private. Name the repository appropriately.",
+            "status": "done",
+            "testStrategy": "Verify that the repository is created and is set to private."
+          },
+          {
+            "id": 2,
+            "title": "Import Upstream Codebase",
+            "description": "Import the upstream mem0ai/mem0-chrome-extension codebase into the newly created repository.",
+            "dependencies": [],
+            "details": "Use Git commands or GitHub import tools to pull the codebase from the upstream repository into the new private repository.",
+            "status": "done",
+            "testStrategy": "Check that the codebase is correctly imported and all files are present."
+          },
+          {
+            "id": 3,
+            "title": "Include LICENSE File",
+            "description": "Ensure the MIT LICENSE file is included in the repository.",
+            "dependencies": [],
+            "details": "Copy the MIT LICENSE file from the upstream repository and add it to the root of the new repository.",
+            "status": "done",
+            "testStrategy": "Verify that the LICENSE file is present and contains the correct content."
+          },
+          {
+            "id": 4,
+            "title": "Add NOTICE File",
+            "description": "Create and add a NOTICE file with appropriate content to the repository.",
+            "dependencies": [],
+            "details": "Draft a NOTICE file that complies with the requirements and add it to the root of the repository.",
+            "status": "done",
+            "testStrategy": "Check that the NOTICE file is present and contains the correct content."
+          },
+          {
+            "id": 5,
+            "title": "Verify Repository Integrity",
+            "description": "Verify the integrity of the repository by checking for the presence of the LICENSE and NOTICE files.",
+            "dependencies": [],
+            "details": "Perform a final check to ensure both the LICENSE and NOTICE files are correctly included in the repository.",
+            "status": "done",
+            "testStrategy": "Confirm that both files are present and correctly formatted."
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Configure Environment Variables",
+        "description": "Set up environment configurations for development, staging, and production, replacing API Key and User ID with Cognito authentication. Integrate enterprise packages for enhanced functionality.",
+        "status": "done",
+        "dependencies": [
+          1
+        ],
+        "priority": "medium",
+        "details": "1. Create a configuration file to manage environment variables. 2. Implement logic to switch between dev, staging, and prod environments. 3. Ensure that API keys and user IDs are not hard-coded but retrieved from environment variables. 4. Use backend envs via serverless-ssm-json-env on gateway side; map environment toggles (dev/staging/prod) to gateway base URLs (SSM-managed on backend). 5. Include context-scope for metadata.context enrichment. 6. Add observability by emitting minimal telemetry (memory_saved, signin_success) to the gateway. 7. Implement MV3 CSP with dynamic import via chrome.runtime.getURL for local adapters, avoiding remote code. 8. Use chrome.storage.session for tokens and chrome.storage.sync for preferences. 9. Explicitly list required manifest permissions: storage, identity, contextMenus, activeTab; host_permissions for AI sites; optional permissions pattern for new sites.\n<info added on 2025-09-06T17:38:42.556Z>\n- Environment toggles should map to the gateway base URL (dev/staging/prod) with base URLs managed via serverless-ssm-json-env; the extension will store only the selected environment and derive the base URL accordingly.\n- Store tokens in chrome.storage.session with structure { token, exp }; preferences (environment, memory_enabled, domainBlacklist[]) will be stored in chrome.storage.sync.\n- Maintain MV3 permissions for storage, identity, contextMenus, and activeTab; narrow host_permissions to specific AI sites.\n- Implement privacy measures including a memory_enabled toggle and domain blacklist enforced on all save/retrieve calls; ensure that page content is never sent unless there is explicit user action; avoid third-party analytics.\n- Enhance observability by emitting minimal counters to the gateway (signin_success/failure, memory_saved, memory_shown, insert_clicked) along with simple latency timings.\n- Enforce CSP to allow only local dynamic imports via chrome.runtime.getURL; disallow eval and new Function.\n</info added on 2025-09-06T17:38:42.556Z>",
+        "testStrategy": "Test environment switching by logging the current environment and ensuring no sensitive information is exposed. Additionally, verify that telemetry is emitted correctly and that storage mechanisms function as intended.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create Configuration File",
+            "description": "Develop a configuration file to manage environment variables for development, staging, and production.",
+            "dependencies": [],
+            "details": "The configuration file should allow for easy management of environment variables and should be structured to support different environments.",
+            "status": "done",
+            "testStrategy": "Verify that the configuration file is correctly formatted and accessible by the application."
+          },
+          {
+            "id": 2,
+            "title": "Implement Environment Switching Logic",
+            "description": "Create logic to switch between development, staging, and production environments based on the configuration file.",
+            "dependencies": [
+              "2.1"
+            ],
+            "details": "This logic should dynamically adjust the application settings based on the current environment.",
+            "status": "done",
+            "testStrategy": "Test the environment switching by logging the current environment and ensuring the correct settings are applied."
+          },
+          {
+            "id": 3,
+            "title": "Secure API Keys and User IDs",
+            "description": "Ensure that API keys and user IDs are retrieved from environment variables instead of being hard-coded.",
+            "dependencies": [
+              "2.2"
+            ],
+            "details": "Implement a method to securely access these sensitive values from the environment variables.",
+            "status": "done",
+            "testStrategy": "Check that no sensitive information is hard-coded and that the application retrieves these values correctly."
+          },
+          {
+            "id": 4,
+            "title": "Integrate Serverless SSM for Environment Variables",
+            "description": "Use serverless-ssm-json-env to manage environment variables on the gateway side and map environment toggles to base URLs.",
+            "dependencies": [
+              "2.3"
+            ],
+            "details": "This integration should ensure that the application can dynamically access the correct base URLs based on the environment.",
+            "status": "done",
+            "testStrategy": "Test the integration by verifying that the correct base URLs are used for each environment."
+          },
+          {
+            "id": 5,
+            "title": "Add Observability and Telemetry",
+            "description": "Implement telemetry to emit minimal observability data such as memory_saved and signin_success to the gateway.",
+            "dependencies": [
+              "2.4"
+            ],
+            "details": "This will help in monitoring the application's performance and user interactions.",
+            "status": "done",
+            "testStrategy": "Verify that telemetry data is emitted correctly and can be accessed for monitoring purposes."
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Implement Cognito Authentication",
+        "description": "Integrate Cognito authentication using Authorization Code + PKCE via chrome.identity.launchWebAuthFlow, utilizing enterprise packages for enhanced functionality.",
+        "status": "done",
+        "dependencies": [
+          2
+        ],
+        "priority": "high",
+        "details": "1. Reference @carousellabs/auth for Cognito helpers where applicable. 2. Build the Cognito Hosted UI URL with parameters: response_type=code, scope=openid email profile, code_challenge_method=S256, code_challenge=<pkce>, redirect_uri=chrome.identity.getRedirectURL(). 3. Start the authentication process via chrome.identity.launchWebAuthFlow({ url, interactive: true }). 4. Exchange the authorization code server-side via POST /auth/exchange to return access_token (JWT) and expires_in; refresh kept server-side. 5. Store the access_token in chrome.storage.session with { token, exp } and implement sign-out functionality to clear the session; add auto-expiry guard. 6. Document the required gateway endpoints: POST /auth/exchange, POST /gateway/mem0/{tenant}/memories, GET /gateway/mem0/{tenant}/memories/search. 7. Implement error handling with retries and backoff; detect user cancellation; ensure service worker restarts safely with minimal state persistence.",
+        "testStrategy": "Perform unit tests on the authentication flow, verify that tokens are correctly received and stored, and ensure that error handling works as intended.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "",
+            "description": "Implement the function to build the Cognito Hosted UI URL with required parameters.",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "",
+            "description": "Use chrome.identity.launchWebAuthFlow to initiate the authentication process.",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "",
+            "description": "Handle the redirect and exchange the authorization code for tokens via the CLabs backend.",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "",
+            "description": "Implement error handling and retries for the authentication process.",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "",
+            "description": "Document the gateway endpoints needed for the authentication flow.",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "",
+            "description": "Add functionality to store access_token in chrome.storage.session with { token, exp } and implement sign-out functionality to clear the session.",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Set Up CLabs Gateway API",
+        "description": "Create routes in the CLabs gateway to interact with the self-hosted Mem0, ensuring JWT authentication is implemented and refined using enterprise packages. The API will support saving and searching memories with specific request and response structures.",
+        "status": "done",
+        "dependencies": [
+          3
+        ],
+        "priority": "high",
+        "details": "1. Define API routes: POST /gateway/mem0/{tenant}/memories accepts { messages, user_id, metadata:{ context, tags, provider, category }, source }. GET /gateway/mem0/{tenant}/memories/search filters: domain, pathPrefix, tags (site:*, path:*), q, limit, offset; returns { items:[{id,text,metadata,score,ts}], nextCursor? }. 2. Use @carousellabs/backend-adapters for HTTP client patterns and request signing if applicable. 3. Use @carousellabs/observability for structured logs (latencies, counts) and minimal counters; no 3rd-party analytics. 4. Use serverless-ssm-json-env in infra to manage per-env base URLs and secrets. Extension must never embed secrets; only short-lived JWT. 5. Implement rate limiting and WAF consistent with serverless-base/serverless-service-register patterns. 6. Return uniform error shapes: { code, message, details? }.",
+        "testStrategy": "Test API routes using Postman or similar tools to ensure they respond correctly to valid and invalid JWTs, and verify that structured logs and error shapes are correctly implemented.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "",
+            "description": "Define API routes: POST /gateway/mem0/{tenant}/memories and GET /gateway/mem0/{tenant}/memories/search.",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "",
+            "description": "Implement JWT authentication middleware to validate tokens.",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "",
+            "description": "Ensure tenant resolution from claims is correctly implemented.",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "",
+            "description": "Integrate @carousellabs/backend-adapters for HTTP client patterns and request signing.",
+            "status": "done",
+            "dependencies": [],
+            "details": "<info added on 2025-09-07T16:29:59.834Z>\nStarting implementation: integrated Mem0Client from @carousellabs/backend-adapters in new @carousellabs/mem0-gateway package. saveHandler now builds subject/content/tags and calls client.storeMemory; searchHandler calls client.listMemories with contextual tag fallback. Added serverless service services/mem0-gateway with routes POST /gateway/mem0/{tenant}/memories and GET /gateway/mem0/{tenant}/memories/search. Observability uses createRequestLogger/incrementErrors; rate limiting via RateLimiter; uniform error shapes { code, message, details? }. Next: wire structured logs counters and ensure SSM env for MEM0_BASE_URL.\n</info added on 2025-09-07T16:29:59.834Z>\n<info added on 2025-09-08T02:51:36.159Z>\nCompleted browser extension integration with the mem0 gateway. The utils/mem0_gateway.js file successfully integrates with the backend @carousellabs/mem0-gateway service. Key accomplishments include:\n\n- Browser extension client (utils/mem0_gateway.js) properly calls /gateway/mem0/{tenant}/memories endpoints\n- Authentication via Bearer token from chrome.storage.session\n- Timeout handling and error management implemented\n- Integration working across all content scripts (Claude, ChatGPT, Perplexity, Grok, etc.)\n- Settings UI allows configuration of gateway base URLs for dev/staging/prod environments\n\nThe backend mem0-gateway service in enterprise-packages is fully implemented with:\n- Mem0Client from @carousellabs/backend-adapters\n- Structured logging via createRequestLogger\n- Error tracking via incrementErrors  \n- Rate limiting via RateLimiter\n- Proper serverless deployment configuration\n\nThe browser extension successfully communicates with the deployed gateway service. Task 4.4 is complete.\n</info added on 2025-09-08T02:51:36.159Z>",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "",
+            "description": "Implement structured logging using @carousellabs/observability.",
+            "status": "done",
+            "dependencies": [],
+            "details": "<info added on 2025-09-08T02:56:01.830Z>\nCompleted structured logging implementation for the browser extension. Key accomplishments include the creation of a structured logger utility, integration into API calls, and enhancements for observability and debugging. The structured logging adheres to @carousellabs/observability patterns, ensuring all memory operations, API calls, user actions, and errors are logged with structured data.\n</info added on 2025-09-08T02:56:01.830Z>",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "",
+            "description": "Manage per-env base URLs and secrets using serverless-ssm-json-env.",
+            "status": "done",
+            "dependencies": [],
+            "details": "<info added on 2025-09-08T02:59:59.736Z>\nCompleted environment-based URL management with serverless-ssm-json-env integration. Key accomplishments include:\n\n- Environment Selection System: Users can choose between dev, staging, and prod environments via settings UI.\n- Per-Environment Base URLs: Separate gateway URLs stored for each environment in chrome.storage.sync.\n- SSM Parameter Integration: Automatically fetches configuration from SSM-style endpoints.\n- Secure Configuration: Extension never embeds secrets, only references environment-specific endpoints.\n- URL Construction: Properly builds /gateway/mem0/{tenant}/memories endpoints for each environment.\n- Default Fallbacks: Production defaults to https://api.carousellabs.co/mem0.\n- Auto-Population: Settings UI can fetch and populate Cognito configuration from gateway endpoints.\n- Environment Utilities: Complete env_config.js module with functions for environment management.\n\nThe implementation follows serverless-ssm-json-env patterns where the backend exposes SSM parameters as HTTP endpoints that the browser extension can fetch. All environment configuration is properly separated and user-configurable through the settings interface.\n</info added on 2025-09-08T02:59:59.736Z>",
+            "testStrategy": ""
+          },
+          {
+            "id": 7,
+            "title": "",
+            "description": "Implement rate limiting and WAF consistent with serverless-base/serverless-service-register patterns.",
+            "status": "done",
+            "dependencies": [],
+            "details": "<info added on 2025-09-08T03:02:34.566Z>\nVerified rate limiting and WAF implementation for mem0-gateway service. Key findings:\n\n✅ Rate Limiting Implementation: The @carousellabs/auth package provides a RateLimiter class that is already integrated into the mem0-gateway service  \n✅ Gateway Rate Limiting: Configured with 60 requests per 60 seconds (60_000ms, 60 requests) in packages/mem0-gateway/src/index.ts  \n✅ WAF Configuration: WAF rules are implemented in various serverless.yml configurations across the enterprise-packages  \n✅ Enterprise Integration: Follows serverless-base/serverless-service-register patterns as specified in the task requirements  \n✅ Backend Security: Rate limiting and WAF are properly implemented on the backend gateway side where they belong  \n✅ Browser Extension: No rate limiting needed on browser extension side - security is handled at the gateway level  \n\nThe rate limiting and WAF implementation is complete and follows enterprise standards. The browser extension communicates with the protected gateway endpoints that have proper rate limiting (60 req/min) and WAF protection already in place.\n</info added on 2025-09-08T03:02:34.566Z>",
+            "testStrategy": ""
+          },
+          {
+            "id": 8,
+            "title": "",
+            "description": "Ensure uniform error shapes are returned to the extension.",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 9,
+            "title": "",
+            "description": "Update the save API to accept { messages, user_id, metadata:{ context, tags, provider, category }, source }.",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 10,
+            "title": "",
+            "description": "Update the search API to filter by domain, pathPrefix, tags (site:*, path:*), q, limit, offset and return { items:[{id,text,metadata,score,ts}], nextCursor? }.",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 11,
+            "title": "",
+            "description": "Implement server-side scoring for ranking with domain/path boosts and recency decay.",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Develop Popup UI",
+        "description": "Create the popup interface for the extension, including sign-in button and display of user profile and tenant information.",
+        "details": "1. Design the popup layout using HTML/CSS. 2. Implement JavaScript to handle sign-in button clicks and display user profile information. 3. Integrate with the authentication state to show tenant details.\n<info added on 2025-09-06T17:38:50.209Z>\n- The header should display the signed-in user's name along with tenant information, and include a sign-in/out call-to-action button.\n- Implement a quick save feature with a textarea for user selection and optional tags, automatically attaching context and tags in the format: site:<domain>, path:<seg1>/<seg2>.\n- Create a recommended list that fetches items based on the current tab's context (domain/path), with each row containing Insert and View buttons. Ensure keyboard navigation is supported (Up/Down arrows, Enter, Esc) and include appropriate accessibility roles.\n- Include states for loading skeletons, empty results, and error retry mechanisms. Signing out should clear session storage.\n- Optimize performance by debouncing search inputs and caching the last results per domain in session storage.\n</info added on 2025-09-06T17:38:50.209Z>",
+        "testStrategy": "Conduct UI tests to ensure the popup displays correctly and the sign-in functionality works as expected.",
+        "priority": "medium",
+        "dependencies": [
+          4
+        ],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Design Popup Layout",
+            "description": "Create the HTML/CSS layout for the popup interface, including the sign-in button and user profile display.",
+            "dependencies": [],
+            "details": "Focus on a user-friendly design that adheres to Chrome extension guidelines and is responsive.",
+            "status": "done",
+            "testStrategy": "Conduct visual inspections to ensure the layout matches design specifications."
+          },
+          {
+            "id": 2,
+            "title": "Implement Sign-In Button Functionality",
+            "description": "Write JavaScript to handle clicks on the sign-in button and initiate the authentication process.",
+            "dependencies": [
+              "5.1"
+            ],
+            "details": "Ensure the button triggers the Cognito authentication flow using launchWebAuthFlow.",
+            "status": "done",
+            "testStrategy": "Perform unit tests to verify that the sign-in button correctly initiates the authentication process."
+          },
+          {
+            "id": 3,
+            "title": "Display User Profile Information",
+            "description": "Implement JavaScript to fetch and display user profile information after successful sign-in.",
+            "dependencies": [
+              "5.2"
+            ],
+            "details": "Integrate with the authentication state to retrieve user data and display it in the popup.",
+            "status": "done",
+            "testStrategy": "Conduct functional tests to ensure user profile information is displayed correctly after sign-in."
+          },
+          {
+            "id": 4,
+            "title": "Integrate Tenant Details Display",
+            "description": "Integrate the logic to show tenant details based on the authenticated user's information.",
+            "dependencies": [
+              "5.3"
+            ],
+            "details": "Ensure tenant information is fetched and displayed alongside user profile data.",
+            "status": "done",
+            "testStrategy": "Perform integration tests to verify that tenant details are displayed correctly in the popup."
+          },
+          {
+            "id": 5,
+            "title": "Conduct UI Testing",
+            "description": "Perform comprehensive UI tests to ensure the popup displays correctly and all functionalities work as expected.",
+            "dependencies": [
+              "5.4"
+            ],
+            "details": "Test the popup in various scenarios to ensure reliability and user experience.",
+            "status": "done",
+            "testStrategy": "Use automated UI testing tools to validate the popup's functionality and appearance."
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Implement Context Menu Functionality",
+        "description": "Add context menu options to save selected text and URL to Carousel Memory.",
+        "details": "1. Use chrome.contextMenus API to create a context menu item. 2. Implement the logic to capture selected text and URL when the menu item is clicked. 3. Store the captured data in the appropriate format for the backend.\n<info added on 2025-09-06T17:38:54.749Z>\nCapture selection along with the page URL and title; enrich metadata.context using a context-scope adapter; add tags in the format: site:<domain>, path:<first-two-segments>. Ensure that only the selected text is sent, and strip out emails and phone numbers unless the user explicitly adds tags. Respect the memory_enabled flag and domainBlacklist; implement a 10-second timeout with 2 retries using backoff; provide toast notifications for success and failure. For observability, increment memory_saved and record saveLatencyMs.\n</info added on 2025-09-06T17:38:54.749Z>",
+        "testStrategy": "Test the context menu functionality by verifying that the correct data is captured and sent to the backend.",
+        "priority": "medium",
+        "dependencies": [
+          5
+        ],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create Context Menu Item",
+            "description": "Use chrome.contextMenus API to create a context menu item for saving selected text and URL.",
+            "dependencies": [],
+            "details": "Implement the context menu creation logic in the background script of the Chrome extension.",
+            "status": "done",
+            "testStrategy": "Verify that the context menu item appears when right-clicking on selected text."
+          },
+          {
+            "id": 2,
+            "title": "Capture Selected Text and URL",
+            "description": "Implement the logic to capture the selected text and URL when the context menu item is clicked.",
+            "dependencies": [
+              "6.1"
+            ],
+            "details": "Add an event listener for the context menu click event to retrieve the selected text and URL.",
+            "status": "done",
+            "testStrategy": "Test that the correct selected text and URL are captured and logged."
+          },
+          {
+            "id": 3,
+            "title": "Format Data for Backend",
+            "description": "Store the captured data in the appropriate format for the backend.",
+            "dependencies": [
+              "6.2"
+            ],
+            "details": "Define the data structure required by the backend and format the captured text and URL accordingly.",
+            "status": "done",
+            "testStrategy": "Ensure that the formatted data matches the expected structure for backend processing."
+          },
+          {
+            "id": 4,
+            "title": "Send Data to Backend",
+            "description": "Implement the logic to send the formatted data to the backend API.",
+            "dependencies": [
+              "6.3"
+            ],
+            "details": "Use fetch or XMLHttpRequest to send the data to the appropriate endpoint in the backend.",
+            "status": "done",
+            "testStrategy": "Verify that the data is successfully sent and received by the backend, checking for correct status codes."
+          },
+          {
+            "id": 5,
+            "title": "Test Context Menu Functionality",
+            "description": "Conduct tests to verify that the context menu functionality works as intended.",
+            "dependencies": [
+              "6.4"
+            ],
+            "details": "Perform end-to-end testing of the context menu, ensuring that selected text and URL are saved correctly.",
+            "status": "done",
+            "testStrategy": "Test the entire flow from context menu click to data storage in the backend, checking for any errors."
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Create Settings Page",
+        "description": "Develop a settings page for the extension to toggle environments and manage sign-in/out functionality.",
+        "details": "1. Design the settings page layout using HTML/CSS. 2. Implement JavaScript to handle environment toggling and sign-in/out actions. 3. Ensure settings are stored in chrome.storage for persistence.\n<info added on 2025-09-06T17:38:58.270Z>\nSettings page details: - Controls: environment select (dev/staging/prod), memory_enabled toggle, domain blacklist editor, sign-in/out button, \"Clear token\" action. - Storage: preferences in chrome.storage.sync; token in chrome.storage.session. - Status: show current tenant/user from JWT claims; indicate token expiry; provide force refresh. - Privacy: explain what is sent; link to internal policy; opt-out disables telemetry and save features.\n</info added on 2025-09-06T17:38:58.270Z>",
+        "testStrategy": "Perform functional tests to ensure that settings are correctly saved and applied.",
+        "priority": "medium",
+        "dependencies": [
+          6
+        ],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Design Settings Page Layout",
+            "description": "Create the HTML/CSS layout for the settings page, ensuring it is user-friendly and visually appealing.",
+            "dependencies": [],
+            "details": "Focus on creating a layout that includes toggles for environments and buttons for sign-in/out functionality.",
+            "status": "done",
+            "testStrategy": "Conduct UI tests to ensure the layout is responsive and elements are correctly positioned."
+          },
+          {
+            "id": 2,
+            "title": "Implement Environment Toggling",
+            "description": "Develop JavaScript functionality to toggle between different environments on the settings page.",
+            "dependencies": [
+              "7.1"
+            ],
+            "details": "Use event listeners to handle user interactions with the environment toggle switches.",
+            "status": "done",
+            "testStrategy": "Test the toggling functionality to ensure the correct environment is activated and reflected in the UI."
+          },
+          {
+            "id": 3,
+            "title": "Implement Sign-In/Out Functionality",
+            "description": "Create JavaScript functions to manage user sign-in and sign-out actions on the settings page.",
+            "dependencies": [
+              "7.1"
+            ],
+            "details": "Integrate with Cognito for authentication and ensure proper handling of user sessions.",
+            "status": "done",
+            "testStrategy": "Perform functional tests to verify that sign-in and sign-out actions work as expected."
+          },
+          {
+            "id": 4,
+            "title": "Store Settings in chrome.storage",
+            "description": "Ensure that user settings are saved in chrome.storage for persistence across sessions.",
+            "dependencies": [
+              "7.2",
+              "7.3"
+            ],
+            "details": "Implement logic to save and retrieve settings from chrome.storage whenever the user toggles environments or signs in/out.",
+            "status": "done",
+            "testStrategy": "Test the storage functionality to confirm that settings persist after page reloads."
+          },
+          {
+            "id": 5,
+            "title": "Conduct Functional Testing",
+            "description": "Perform comprehensive testing of the settings page to ensure all functionalities work correctly.",
+            "dependencies": [
+              "7.4"
+            ],
+            "details": "Test the layout, environment toggling, sign-in/out functionality, and settings persistence.",
+            "status": "done",
+            "testStrategy": "Create a checklist of all functionalities to verify that each aspect of the settings page operates as intended."
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Implement Content Scripts for AI Integration",
+        "description": "Develop minimal content scripts to insert memory buttons into ChatGPT and Claude interfaces.",
+        "details": "1. Create content scripts that hook into the DOM of ChatGPT and Claude. 2. Implement logic to insert memory buttons at appropriate locations. 3. Ensure that the buttons trigger the save functionality when clicked.\n<info added on 2025-09-06T17:43:30.277Z>\n- Content scripts will target the ChatGPT composer (role=\"textbox\" / contenteditable) and Claude composer (data-testid variations), with a guard for SPA re-renders.\n- A small inline button group will be injected near the composer; on click, it will request a context-aware list from the background or service worker and display a popover, with keyboard support included.\n- On selection, the script will paste text into the composer using execCommand/insertText fallback, preserving the user cursor when possible.\n- Performance optimizations will include a debounced MutationObserver, teardown on route changes, throttled queries, and caching per domain.\n- The implementation will comply with CSP/MV3 by avoiding remote code, using a static content script, limiting DOM operations, and avoiding eval.\n- Host permissions will be restricted to chat.openai.com and claude.ai, with optional permissions for others.\n- The script will not read the entire DOM/content, only interacting with the composer field.\n</info added on 2025-09-06T17:43:30.277Z>",
+        "testStrategy": "Conduct integration tests to verify that buttons appear correctly and function as intended within the target applications.",
+        "priority": "medium",
+        "dependencies": [
+          7
+        ],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create Content Script for DOM Hooking",
+            "description": "Develop a content script that hooks into the DOM of ChatGPT and Claude interfaces.",
+            "dependencies": [],
+            "details": "Implement the necessary logic to identify and hook into the DOM elements of the ChatGPT and Claude interfaces.",
+            "status": "done",
+            "testStrategy": "Verify that the content script loads correctly and hooks into the DOM without errors."
+          },
+          {
+            "id": 2,
+            "title": "Implement Memory Button Insertion Logic",
+            "description": "Create the logic to insert memory buttons at appropriate locations within the ChatGPT and Claude interfaces.",
+            "dependencies": [],
+            "details": "Determine the optimal locations for the memory buttons and implement the insertion logic in the content script.",
+            "status": "done",
+            "testStrategy": "Conduct visual checks to ensure buttons appear in the correct locations on the interfaces."
+          },
+          {
+            "id": 3,
+            "title": "Add Click Event for Memory Buttons",
+            "description": "Ensure that the memory buttons trigger the save functionality when clicked.",
+            "dependencies": [],
+            "details": "Implement event listeners for the memory buttons to handle click events and trigger the save functionality.",
+            "status": "done",
+            "testStrategy": "Test the buttons to confirm that clicking them successfully triggers the save functionality."
+          },
+          {
+            "id": 4,
+            "title": "Ensure CSP Compliance for Content Scripts",
+            "description": "Review and modify content scripts to ensure compliance with Content Security Policy (CSP) requirements.",
+            "dependencies": [],
+            "details": "Check all imports and script executions to ensure they are CSP-safe and do not violate any security policies.",
+            "status": "done",
+            "testStrategy": "Run the extension in a CSP-enabled environment to verify that no CSP violations occur."
+          },
+          {
+            "id": 5,
+            "title": "Conduct Integration Testing",
+            "description": "Perform integration tests to verify that the memory buttons function correctly within the target applications.",
+            "dependencies": [],
+            "details": "Create test cases to validate the appearance and functionality of memory buttons in both ChatGPT and Claude interfaces.",
+            "status": "done",
+            "testStrategy": "Execute integration tests and document results to ensure all functionalities work as intended."
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Set Up Telemetry and Privacy Measures",
+        "description": "Implement telemetry for minimal event counts and ensure no third-party analytics are used.",
+        "details": "1. Implement logging for key events within the extension. 2. Ensure that all telemetry data is sent to the CLabs gateway without third-party involvement. 3. Provide users with an opt-out option for telemetry.\n<info added on 2025-09-06T17:43:33.492Z>\n- Events to log: signin_success, signin_failure, memory_saved, memory_shown (list render), insert_clicked, saveLatencyMs, searchLatencyMs timings. \n- Data transport: Use POST to the gateway at /telemetry or enrich existing endpoints; include EMF-style properties: { service: 'memory-ext', stage, tenant, domain }. \n- Opt-out conditions: Disable all telemetry when memory_enabled is false or telemetry_opt_out is true. \n- Sampling: Default sampling rate is 1.0, with the option to lower it via settings in development if telemetry is too noisy. \n- Ensure no third-party SDKs are used; utilize fetch with a short timeout and drop requests on failure.\n</info added on 2025-09-06T17:43:33.492Z>",
+        "testStrategy": "Review telemetry logs to ensure compliance with privacy requirements and verify that opt-out functionality works.",
+        "priority": "low",
+        "dependencies": [
+          8
+        ],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement Event Logging",
+            "description": "Set up logging for key events within the Chrome extension to track user interactions.",
+            "dependencies": [],
+            "details": "Use the appropriate logging methods to capture minimal event counts while ensuring compliance with privacy measures.",
+            "status": "done",
+            "testStrategy": "Review the logs to ensure that only the intended events are recorded."
+          },
+          {
+            "id": 2,
+            "title": "Configure Data Transmission",
+            "description": "Ensure that all telemetry data is sent directly to the CLabs gateway without involving third-party analytics.",
+            "dependencies": [
+              "9.1"
+            ],
+            "details": "Implement the necessary API calls to transmit telemetry data securely to the designated gateway endpoint.",
+            "status": "done",
+            "testStrategy": "Verify that telemetry data is correctly sent and received by the CLabs gateway."
+          },
+          {
+            "id": 3,
+            "title": "Implement Opt-Out Functionality",
+            "description": "Provide users with an option to opt-out of telemetry data collection.",
+            "dependencies": [],
+            "details": "Create a user interface element that allows users to toggle telemetry data collection on or off.",
+            "status": "done",
+            "testStrategy": "Test the opt-out functionality to ensure that it effectively stops data collection when selected."
+          },
+          {
+            "id": 4,
+            "title": "Review Privacy Compliance",
+            "description": "Conduct a review of the telemetry implementation to ensure compliance with privacy requirements.",
+            "dependencies": [
+              "9.1",
+              "9.2",
+              "9.3"
+            ],
+            "details": "Assess the logging and data transmission processes against privacy standards and regulations.",
+            "status": "done",
+            "testStrategy": "Compile a report detailing compliance findings and any necessary adjustments."
+          },
+          {
+            "id": 5,
+            "title": "Document Telemetry Implementation",
+            "description": "Create documentation outlining the telemetry setup and privacy measures for internal reference.",
+            "dependencies": [
+              "9.1",
+              "9.2",
+              "9.3",
+              "9.4"
+            ],
+            "details": "Include details on event logging, data transmission, opt-out options, and compliance review findings.",
+            "status": "done",
+            "testStrategy": "Ensure that the documentation is clear and accessible for future reference by the development team."
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Prepare for Internal Distribution",
+        "description": "Package the extension for internal distribution and prepare for a private listing in the Chrome Web Store.",
+        "details": "1. Zip the extension files for unpacked development. 2. Prepare documentation for internal users on how to install the extension. 3. Set up a private listing in the Chrome Web Store for CLabs accounts.",
+        "testStrategy": "Test the installation process from the zipped package and verify that the extension functions correctly in the Chrome environment.",
+        "priority": "low",
+        "dependencies": [
+          9
+        ],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Zip Extension Files",
+            "description": "Package the extension files into a zip format for internal distribution.",
+            "dependencies": [],
+            "details": "Ensure that all necessary files for the Chrome MV3 extension are included in the zip package.",
+            "status": "done",
+            "testStrategy": "Verify the integrity of the zip file and ensure it can be extracted without errors."
+          },
+          {
+            "id": 2,
+            "title": "Prepare Installation Documentation",
+            "description": "Create a user-friendly guide for internal users on how to install the extension.",
+            "dependencies": [],
+            "details": "Include step-by-step instructions, screenshots, and troubleshooting tips for installation.",
+            "status": "done",
+            "testStrategy": "Review the documentation for clarity and completeness, and conduct a peer review."
+          },
+          {
+            "id": 3,
+            "title": "Set Up Private Listing in Chrome Web Store",
+            "description": "Configure a private listing for the extension in the Chrome Web Store for CLabs accounts.",
+            "dependencies": [],
+            "details": "Follow the Chrome Web Store guidelines to create a private listing and ensure it is accessible only to authorized users.",
+            "status": "done",
+            "testStrategy": "Test the visibility of the listing by attempting to access it with a CLabs account."
+          },
+          {
+            "id": 4,
+            "title": "Test Installation Process",
+            "description": "Conduct tests to ensure the installation process from the zipped package works correctly.",
+            "dependencies": [
+              "10.1",
+              "10.2"
+            ],
+            "details": "Install the extension from the zip file and verify that it functions as expected in the Chrome environment.",
+            "status": "done",
+            "testStrategy": "Document any issues encountered during installation and ensure all features work post-installation."
+          },
+          {
+            "id": 5,
+            "title": "Review and Finalize Distribution Package",
+            "description": "Conduct a final review of the packaged extension and documentation before distribution.",
+            "dependencies": [
+              "10.1",
+              "10.2",
+              "10.3",
+              "10.4"
+            ],
+            "details": "Ensure all components are ready for internal distribution and meet quality standards.",
+            "status": "done",
+            "testStrategy": "Perform a checklist review against distribution requirements and gather feedback from stakeholders."
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "Context-aware memory retrieval & ranking",
+        "description": "Use context-scope (domain/route/page/env) to enrich queries and ranking when pulling memories. Implement context-matched lists in popup and side panel, with insert-into-prompt. Blend tags (site:*), tenant, and user signals.",
+        "details": "- Compute context keys from current tab (domain.name, route.path, page.title, env.locale/timezone)\n- Query gateway search: GET /gateway/mem0/{tenant}/memories/search with filters (tags, domain, path prefix) and fallback keyword search\n- Ranking: boost exact domain/path, decay with path depth; blend recency; cap results\n- Surfaces: popup list (compact), side panel (rich), content button quick-pick\n- Caching: per-domain LRU in chrome.storage.session; invalidate on nav\n- Privacy: respect settings blacklist and opt-out; never send page content unless user action\n- Telemetry: memory_shown, insert_clicked (counts only)\n<info added on 2025-09-06T17:34:40.518Z>\n## Context-Aware Memory Save/Retrieval Implementation Guidance\n\n1. **Signals & Schema**: Define a schema capturing `domain.name`, `fqdn`, `subdomain`, `tld`, `route.path`, `query`, `page.title`, and `env.locale/timezone/UA`. Map these to `metadata.context` and a tagging taxonomy (e.g., `site:<domain>`, `path:<seg1>/<seg2>`, `persona:<group>`). Implement redaction rules to protect PII.\n\n2. **Save Flow**: Enrich the memory payload with context using `@carousellabs/context-scope`. Ensure CSP compliance for imports, implement error handling with retries, and provide privacy toggles and a blacklist for domains/paths.\n\n3. **Retrieval**: Use gateway search with filters for tags, domain, and path prefix. Implement a ranking formula that boosts domain/path relevance and applies recency decay. Use an LRU cache strategy per domain in `chrome.storage.session`, invalidating on navigation.\n\n4. **UI Surfaces**: Design a compact popup list with insert buttons, a rich side panel for detailed views, and a content quick-pick feature. Ensure accessibility and keyboard navigation.\n\n5. **Multi-Tenant/Claims**: Resolve tenant/group from JWT claims during authentication, allowing fallback settings per environment.\n\n6. **Metrics**: Track minimal counters (`memory_saved`, `memory_shown`, `insert_clicked`) and measure latency for save/retrieval operations.\n\n7. **Test Plan**: Stub the gateway for API responses, create fixtures for various context scenarios, and conduct end-to-end tests in the MV3 environment to validate functionality and privacy compliance.\n</info added on 2025-09-06T17:34:40.518Z>\n<info added on 2025-09-06T17:39:16.616Z>\n- Context keys: use adapter to compute {domain.name, fqdn, subdomain, tld, route.path, query, page.title, env.locale/timezone/UA}. Store under metadata.context; tags: site:<domain>, path:<seg1>/<seg2>.\n- Search: GET /gateway/mem0/{tenant}/memories/search?domain=<name>&pathPrefix=<first-two-segments>&tags=site:<domain>&limit=10&q=<kw?>; fallback to keyword when no contextual hits.\n- Ranking: score = 4*domainExact + 2*pathPrefixMatch + recencyBoost(ts) – pathDepthPenalty. Cap 20.\n- Cache: LRU per-domain in chrome.storage.session with TTL (5m); invalidate on tab URL change.\n- UI surfaces: popup compact list, side panel rich list, content quick-pick; keyboard and a11y.\n- Privacy: respect memory_enabled + blacklist; don’t prefetch if disabled; never send page content.\n- Metrics: memory_shown, insert_clicked counts; searchLatencyMs.\n</info added on 2025-09-06T17:39:16.616Z>",
+        "testStrategy": "Stub gateway search in dev; verify filters and ranking; E2E in MV3 with content scripts; ensure no PII leaks when opted out.",
+        "status": "done",
+        "dependencies": [
+          4,
+          6
+        ],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Compute Context Keys",
+            "description": "Extract context keys from the current tab including domain name, route path, page title, and environment locale/timezone.",
+            "dependencies": [],
+            "details": "Implement a function to retrieve and compute context keys from the active browser tab.",
+            "status": "done",
+            "testStrategy": "Verify that the correct context keys are extracted and formatted as expected."
+          },
+          {
+            "id": 2,
+            "title": "Implement Gateway Search Query",
+            "description": "Create a function to query the gateway search API with appropriate filters and fallback mechanisms.",
+            "dependencies": [
+              "11.1"
+            ],
+            "details": "Use the GET /gateway/mem0/{tenant}/memories/search endpoint with filters for tags, domain, and path prefix.",
+            "status": "done",
+            "testStrategy": "Stub the gateway search in development and verify that filters and fallback searches work correctly."
+          },
+          {
+            "id": 3,
+            "title": "Develop Ranking Algorithm",
+            "description": "Implement the ranking logic to boost results based on exact domain/path and apply decay with path depth.",
+            "dependencies": [
+              "11.2"
+            ],
+            "details": "Create a ranking function that blends recency and caps the number of results returned.",
+            "status": "done",
+            "testStrategy": "Test the ranking algorithm with various inputs to ensure it behaves as expected."
+          },
+          {
+            "id": 4,
+            "title": "Design UI Surfaces",
+            "description": "Create the UI components for displaying memory retrieval results in a popup list and side panel.",
+            "dependencies": [
+              "11.3"
+            ],
+            "details": "Design a compact popup list and a rich side panel for displaying context-matched memories.",
+            "status": "done",
+            "testStrategy": "Conduct UI tests to ensure that the components render correctly and are user-friendly."
+          },
+          {
+            "id": 5,
+            "title": "Implement Caching Mechanism",
+            "description": "Set up a per-domain LRU caching system in chrome.storage.session to store memory retrieval results.",
+            "dependencies": [
+              "11.4"
+            ],
+            "details": "Implement logic to invalidate the cache on navigation events and manage memory efficiently.",
+            "status": "done",
+            "testStrategy": "Test the caching mechanism to ensure it stores and retrieves data correctly, and invalidates as expected."
+          },
+          {
+            "id": 6,
+            "title": "Ensure Privacy Compliance",
+            "description": "Implement privacy features to respect user settings, including blacklist and opt-out options.",
+            "dependencies": [
+              "11.5"
+            ],
+            "details": "Ensure that no page content is sent unless initiated by user action and that privacy settings are respected.",
+            "status": "done",
+            "testStrategy": "Verify that privacy settings are enforced and that no PII is leaked during memory retrieval."
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Refactor sidebar.js to Modern Utilities",
+        "description": "Refactor the sidebar.js file to utilize modern utilities such as gateway, auth, context, and ranking, while removing any legacy UI components.",
+        "details": "1. Analyze the current implementation of sidebar.js to identify legacy UI components and functionalities that need to be replaced. 2. Integrate the CLabs gateway API for memory interactions, ensuring that all API calls are updated to use the new routes defined in Task 4. 3. Implement authentication using the auth utility to manage user sessions and secure API requests. 4. Utilize the context utility to enrich the sidebar's functionality with context-aware features, ensuring that the sidebar reflects the current state of the application. 5. Implement ranking logic to prioritize memory display based on user interactions and context, leveraging the ranking utility. 6. Remove all legacy UI components and replace them with modern, responsive designs that align with the popup and content scripts. 7. Ensure that the refactored sidebar.js is modular and maintainable, following best practices for code organization and documentation.",
+        "testStrategy": "1. Conduct unit tests to verify that all new functionalities in sidebar.js work as intended, including API interactions and context handling. 2. Perform integration tests to ensure that the sidebar interacts correctly with the popup and content scripts. 3. Manually test the sidebar in various scenarios to confirm that legacy components are fully removed and that the UI behaves as expected. 4. Review the code for adherence to coding standards and best practices, ensuring that the refactored code is clean and maintainable.",
+        "status": "pending",
+        "dependencies": [
+          4,
+          11
+        ],
+        "priority": "medium",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2025-09-06T17:08:19.452Z",
+      "updated": "2025-09-08T05:13:07.298Z",
+      "description": "Tasks for master context"
+    }
+  }
+}

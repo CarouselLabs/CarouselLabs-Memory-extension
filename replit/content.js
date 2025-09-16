@@ -33,36 +33,28 @@ var replitSearch = OPENMEMORY_SEARCH.createOrchestrator({
   fetch: async function(query, opts) {
     const data = await new Promise((resolve) => {
       chrome.storage.sync.get(
-        ["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"],
+        ["userId", "access_token", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"],
         function (items) { resolve(items); }
       );
     });
     const userId = data.userId || data.user_id || "chrome-extension-user";
     const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.1;
     const topK = data.top_k !== undefined ? data.top_k : 10;
-    if (!data.apiKey && !data.access_token) return [];
-    const authHeader = data.access_token ? `Bearer ${data.access_token}` : `Token ${data.apiKey}`;
+    if (!data.access_token) return [];
     const optionalParams = {};
     if (data.selected_org) optionalParams.org_id = data.selected_org;
     if (data.selected_project) optionalParams.project_id = data.selected_project;
-    const resp = await fetch("https://api.mem0.ai/v2/memories/search/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: authHeader },
-      body: JSON.stringify({
-        query: query,
-        filters: { user_id: userId },
-        rerank: true,
-        threshold: threshold,
-        top_k: topK,
-        filter_memories: false,
-        source: "OPENMEMORY_CHROME_EXTENSION",
-        ...optionalParams,
-      }),
-      signal: opts && opts.signal,
-    });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const json = await resp.json();
-    return (json || []).map((item) => ({ id: item.id || `memory-${Date.now()}-${Math.random().toString(36).substring(2,9)}`, text: item.memory, categories: item.categories || [] }));
+    const gw = await import(chrome.runtime.getURL('utils/mem0_gateway.js'));
+    const params = {
+      q: query,
+      user_id: userId,
+      threshold: threshold,
+      limit: topK,
+      ...optionalParams
+    };
+    const resp = gw && gw.searchMemories ? await gw.searchMemories(params) : { items: [] };
+    const items = (resp && resp.items) ? resp.items : [];
+    return items.map((item) => ({ id: item.id || `memory-${Date.now()}-${Math.random().toString(36).substring(2,9)}`, text: item.text || item.memory, categories: item.categories || [] }));
   },
   onSuccess: function(normQuery, memoryItems) {
     if (!memoryModalShown) return;
@@ -344,18 +336,16 @@ function addSendButtonListener() {
     
     // Asynchronously store the memory
     chrome.storage.sync.get(
-      ["apiKey", "userId", "access_token", "memory_enabled", "selected_org", "selected_project", "user_id"],
+      ["userId", "access_token", "memory_enabled", "selected_org", "selected_project", "user_id"],
       function (items) {
         
         
         // Skip if memory is disabled or no credentials
-        if (items.memory_enabled === false || (!items.apiKey && !items.access_token)) {
+        if (items.memory_enabled === false || (!items.access_token)) {
           return;
         }
         
-        const authHeader = items.access_token
-          ? `Bearer ${items.access_token}`
-          : `Token ${items.apiKey}`;
+        const authHeader = items.access_token ? `Bearer ${items.access_token}` : null;
         
         const userId = items.userId || items.user_id || "chrome-extension-user";
         
@@ -367,32 +357,22 @@ function addSendButtonListener() {
           optionalParams.project_id = items.selected_project;
         }
         
-        // Send memory to mem0 API asynchronously without waiting for response
-        fetch("https://api.mem0.ai/v1/memories/", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: authHeader,
-          },
-          body: JSON.stringify({
-            messages: [{ role: "user", content: cleanMessage }],
-            user_id: userId,
-            infer: true,
-            metadata: {
-              provider: "Replit",
-            },
-            source: "OPENMEMORY_CHROME_EXTENSION",
-            ...optionalParams,
-          }),
-        })
-        .then(response => {
-          return response.json();
-        })
-        .then(data => {
-        })
-        .catch((error) => {
-          console.error("[Mem0 Replit] Error saving memory:", error);
-        });
+        (async () => {
+          try {
+            const gw = await import(chrome.runtime.getURL('utils/mem0_gateway.js'));
+            const tenant = items.selected_org || items.selected_project || 'carousel-labs';
+            await (gw && gw.saveMemory ? gw.saveMemory({ tenant, body: {
+              messages: [{ role: "user", content: cleanMessage }],
+              user_id: userId,
+              infer: true,
+              metadata: { provider: "Replit" },
+              source: "OPENMEMORY_CHROME_EXTENSION",
+              ...optionalParams,
+            }}) : Promise.resolve(false));
+          } catch (e) {
+            console.error("[Mem0 Replit] Error saving memory via gateway:", e);
+          }
+        })();
       }
     );
     
@@ -484,15 +464,15 @@ async function handleMem0Modal(sourceButtonId = null) {
   // Check if user is logged in
   const loginData = await new Promise((resolve) => {
     chrome.storage.sync.get(
-      ["apiKey", "userId", "access_token"],
+      ["userId", "access_token"],
       function (items) {
         resolve(items);
       }
     );
   });
 
-  // If no API key and no access token, show login popup
-  if (!loginData.apiKey && !loginData.access_token) {
+  // If no access token, show login popup
+  if (!loginData.access_token) {
     showLoginPopup();
     return;
   }
@@ -527,14 +507,13 @@ async function handleMem0Modal(sourceButtonId = null) {
   try {
     const data = await new Promise((resolve) => {
       chrome.storage.sync.get(
-        ["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"],
+        ["userId", "access_token", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"],
         function (items) {
           resolve(items);
         }
       );
     });
 
-    const apiKey = data.apiKey;
     const userId = data.userId || data.user_id || "chrome-extension-user";
     const accessToken = data.access_token;
     const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.1;
@@ -549,7 +528,7 @@ async function handleMem0Modal(sourceButtonId = null) {
       optionalParams.project_id = data.selected_project;
     }
 
-    if (!apiKey && !accessToken) {
+    if (!accessToken) {
       isProcessingMem0 = false;
       return;
     }
@@ -560,35 +539,29 @@ async function handleMem0Modal(sourceButtonId = null) {
       browser: getBrowser()
     });
 
-    const authHeader = accessToken
-      ? `Bearer ${accessToken}`
-      : `Token ${apiKey}`;
+    const authHeader = accessToken ? `Bearer ${accessToken}` : null;
 
     const messages = [{ role: "user", content: message }];
 
     // Use orchestrator immediate run
     replitSearch.runImmediate(message);
 
-    // Proceed with adding memory asynchronously without awaiting
-    fetch("https://api.mem0.ai/v1/memories/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: authHeader,
-      },
-      body: JSON.stringify({
-        messages: messages,
-        user_id: userId,
-        infer: true,
-        metadata: {
-          provider: "Replit",
-        },
-        source: "OPENMEMORY_CHROME_EXTENSION",
-        ...optionalParams,
-      }),
-    }).catch((error) => {
-      console.error("Error adding memory:", error);
-    });
+    (async () => {
+      try {
+        const gw = await import(chrome.runtime.getURL('utils/mem0_gateway.js'));
+        const tenant = data.selected_org || data.selected_project || 'carousel-labs';
+        await (gw && gw.saveMemory ? gw.saveMemory({ tenant, body: {
+          messages,
+          user_id: userId,
+          infer: true,
+          metadata: { provider: "Replit" },
+          source: "OPENMEMORY_CHROME_EXTENSION",
+          ...optionalParams,
+        }}) : Promise.resolve(false));
+      } catch (e) {
+        console.error("Error adding memory via gateway:", e);
+      }
+    })();
     
   } catch (error) {
     console.error("Error:", error);
@@ -891,7 +864,7 @@ function showLoginPopup() {
   `;
   
   const heading = document.createElement('h2');
-  heading.textContent = 'Sign in to OpenMemory';
+  heading.textContent = 'Sign in to MemLoop';
   heading.style.cssText = `
     margin: 0;
     font-size: 18px;
@@ -933,7 +906,7 @@ function showLoginPopup() {
   
   // Add logo and text
   const logoDark = document.createElement('img');
-  logoDark.src = chrome.runtime.getURL("icons/mem0-claude-icon.png");
+  logoDark.src = chrome.runtime.getURL("icons/clabs-logo.svg");
   logoDark.style.cssText = `
     width: 20px;
     height: 20px;
@@ -941,7 +914,7 @@ function showLoginPopup() {
   `;
   
   const signInText = document.createElement('span');
-  signInText.textContent = 'Sign in with OpenMemory';
+  signInText.textContent = 'Sign in';
   
   signInButton.appendChild(logoDark);
   signInButton.appendChild(signInText);
@@ -955,9 +928,17 @@ function showLoginPopup() {
   });
   
   // Open sign-in page when clicked
-  signInButton.addEventListener('click', () => {
-    window.open('https://app.mem0.ai/login', '_blank');
-    document.body.removeChild(popupOverlay);
+  signInButton.addEventListener('click', async () => {
+    try {
+      await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: 'memloop_signin' }, (resp) => {
+          if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
+          if (!resp || !resp.ok) { reject(new Error((resp && resp.error) || 'signin_failed')); return; }
+          resolve(true);
+        });
+      });
+      document.body.removeChild(popupOverlay);
+    } catch (e) { console.warn('MemLoop signin failed:', e); }
   });
   
   // Assemble popup
@@ -1179,16 +1160,16 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 
   // Add Mem0 logo
   const logoImg = document.createElement('img');
-  logoImg.src = chrome.runtime.getURL("icons/mem0-claude-icon.png");
+  logoImg.src = chrome.runtime.getURL("icons/clabs-logo.svg");
   logoImg.style.cssText = `
     width: 26px;
     height: 26px;
     border-radius: 50%;
   `;
 
-  // Add "OpenMemory" title
+  // Add "MemLoop" title
   const title = document.createElement('div');
-  title.textContent = "OpenMemory";
+  title.textContent = "MemLoop";
   title.style.cssText = `
     font-size: 16px;
     font-weight: 600;
@@ -1988,7 +1969,7 @@ function injectMem0Button() {
     
     // Add icon to button
     const iconImg = document.createElement('img');
-    iconImg.src = chrome.runtime.getURL('icons/mem0-claude-icon.png');
+    iconImg.src = chrome.runtime.getURL('icons/clabs-logo.svg');
     iconImg.style.cssText = `
       width: 14px !important;
       height: 14px !important;

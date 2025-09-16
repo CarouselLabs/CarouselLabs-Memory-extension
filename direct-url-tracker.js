@@ -112,7 +112,7 @@ function isSearchResultsUrl(urlString) {
     const params = u.searchParams || new URLSearchParams();
 
     // Google results: /search?q=
-    if ((/^.*\.google\.[^\/]+$/.test(host) || host === "google.com" || host.endsWith(".google.com")) && path.startsWith("/search")) {
+    if ((/^.*\.google\.[^/]+$/.test(host) || host === "google.com" || host.endsWith(".google.com")) && path.startsWith("/search")) {
       if (params.get("q")) return true;
     }
 

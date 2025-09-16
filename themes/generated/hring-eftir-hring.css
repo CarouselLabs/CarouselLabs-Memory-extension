@@ -1,0 +1,37 @@
+:root{
+  --color-primary: #8B9D77;
+  --color-secondary: #B8860B;
+  --color-accent: #D4AF37;
+  --color-background: #FDFDF5;
+  --color-surface: #F9F9F1;
+  --color-text-primary: #2C2C2C;
+  --color-text-secondary: #5A5A5A;
+  --color-text-muted: #8A8A8A;
+  --color-border: #E6E6E0;
+  --color-success: #388E3C;
+  --color-warning: #FBC02D;
+  --color-error: #D32F2F;
+  --color-info: #1976D2;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.1);
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+  --easing-default: cubic-bezier(0.25, 0.8, 0.25, 1);
+  --easing-smooth: cubic-bezier(0.645, 0.045, 0.355, 1);
+  --easing-bounce: cubic-bezier(0.68,-0.55,0.265,1.55);
+  --bg-dark: #FDFDF5;
+  --bg-card: #F9F9F1;
+  --bg-button: #F9F9F1;
+  --bg-button-hover: #8A8A8A;
+  --text-white: #2C2C2C;
+  --text-gray: #8A8A8A;
+  --purple: #8B9D77;
+  --border-color: #E6E6E0;
+  --tag-bg: #F9F9F1;
+  --scrollbar-bg: #FDFDF5;
+  --scrollbar-thumb: #F9F9F1;
+  --success-color: #388E3C;
+}

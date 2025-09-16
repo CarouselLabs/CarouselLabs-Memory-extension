@@ -10,59 +10,47 @@ let lastSendInitiatedAt = 0;
 
 let currentModalSourceButtonId = null;
 
-var claudeSearch = OPENMEMORY_SEARCH.createOrchestrator({
+var claudeSearch = MEMLOOP_SEARCH.createOrchestrator({
   fetch: async function(query, opts) {
-    const data = await new Promise((resolve) => {
-      chrome.storage.sync.get(
-        ["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"],
-        function (items) { resolve(items); }
-      );
-    });
+    const auth = await import(chrome.runtime.getURL('utils/auth.js'));
+    const gateway = await import(chrome.runtime.getURL('utils/mem0_gateway.js'));
+    
+    const token = await auth.getAccessToken();
+    if (!token) return [];
 
-    const apiKey = data.apiKey;
-    const accessToken = data.access_token;
-    if (!apiKey && !accessToken) return [];
-
-    const authHeader = accessToken ? `Bearer ${accessToken}` : `Token ${apiKey}`;
-    const userId = data.userId || data.user_id || "chrome-extension-user";
-    const threshold = (data.similarity_threshold !== undefined) ? data.similarity_threshold : 0.1;
-    const topK = (data.top_k !== undefined) ? data.top_k : 10;
-
-    const optionalParams = {};
-    if (data.selected_org) optionalParams.org_id = data.selected_org;
-    if (data.selected_project) optionalParams.project_id = data.selected_project;
-
-    const payload = {
-      query,
-      filters: { user_id: userId },
-      rerank: true,
-      threshold,
-      top_k: topK,
-      filter_memories: false,
-      source: "OPENMEMORY_CHROME_EXTENSION",
-      ...optionalParams,
+    const contextScope = await import(chrome.runtime.getURL('utils/context_scope_adapter.js'));
+    const context = await contextScope.getContext({});
+    
+    const searchParams = {
+      q: query,
+      domain: context.domain?.name,
+      pathPrefix: context.route?.path,
+      tags: context.tags?.join(','),
+      limit: 10,
+      offset: 0,
     };
-
-    const res = await fetch("https://api.mem0.ai/v2/memories/search/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: authHeader,
-      },
-      body: JSON.stringify(payload),
-      signal: opts && opts.signal
-    });
-
-    if (!res.ok) throw new Error(`API request failed with status ${res.status}`);
-    return await res.json();
+    
+    return gateway.searchMemories(searchParams);
   },
 
-  onSuccess: function(normQuery, responseData) {
+  onSuccess: async function(normQuery, responseData) {
     if (!memoryModalShown) return;
-    const memoryItems = (responseData || []).map((item, index) => ({
-      id: item.id || `memory-${Date.now()}-${index}`,
-      text: item.memory,
-      categories: item.categories || []
+
+    const ranking = await import(chrome.runtime.getURL('utils/ranking.js'));
+    const contextScope = await import(chrome.runtime.getURL('utils/context_scope_adapter.js'));
+    const context = await contextScope.getContext({});
+    
+    const rankedItems = ranking.rankAndSort(responseData.items || [], {
+      q: normQuery,
+      domain: context.domain?.name,
+      pathPrefix: context.route?.path,
+    });
+
+    const memoryItems = (rankedItems || []).map(item => ({
+      id: item.id,
+      text: item.text,
+      score: item.score,
+      categories: item.metadata?.tags || []
     }));
     createMemoryModal(memoryItems, false, currentModalSourceButtonId);
   },
@@ -298,10 +286,11 @@ function addMem0Button() {
       mem0Button.setAttribute("aria-label", "Add memories to your prompt");
 
       const mem0Icon = document.createElement("img");
-      mem0Icon.src = chrome.runtime.getURL("icons/mem0-claude-icon-p.png");
-      mem0Icon.style.width = "16px";
-      mem0Icon.style.height = "16px";
-      mem0Icon.style.borderRadius = "50%";
+      mem0Icon.src = chrome.runtime.getURL("icons/CLabs_Logo_Beaker-BlackOnWhite_v2.svg");
+      mem0Icon.style.cssText = `
+        width: 20px;
+        height: 20px;
+      `;
 
       const popup = createPopup(buttonContainer, "top");
       mem0Button.appendChild(mem0Icon);
@@ -384,7 +373,8 @@ function addMem0Button() {
         const rect = mem0Button.getBoundingClientRect();
         const buttonCenterX = rect.left + rect.width / 2;
         
-        // Set initial tooltip properties
+        // Set initial tooltip properties (guard if missing)
+        if (!tooltip) return;
         tooltip.style.display = "block";
         
         // Once displayed, we can get its height and set proper positioning
@@ -445,10 +435,11 @@ function addMem0Button() {
       mem0Button.setAttribute("aria-label", "Add memories to your prompt");
 
       const mem0Icon = document.createElement("img");
-      mem0Icon.src = chrome.runtime.getURL("icons/mem0-claude-icon-p.png");
-      mem0Icon.style.width = "16px";
-      mem0Icon.style.height = "16px";
-      mem0Icon.style.borderRadius = "50%";
+      mem0Icon.src = chrome.runtime.getURL("icons/CLabs_Logo_Beaker-BlackOnWhite_v2.svg");
+      mem0Icon.style.cssText = `
+        width: 20px;
+        height: 20px;
+      `;
 
       const popup = createPopup(buttonContainer, "right");
       mem0Button.appendChild(mem0Icon);
@@ -512,7 +503,8 @@ function addMem0Button() {
         const rect = mem0Button.getBoundingClientRect();
         const buttonCenterX = rect.left + rect.width / 2;
         
-        // Set initial tooltip properties
+        // Set initial tooltip properties (guard)
+        if (typeof tooltip === 'undefined' || !tooltip) return;
         tooltip.style.display = "block";
         
         // Once displayed, we can get its height and set proper positioning
@@ -565,10 +557,11 @@ function addMem0Button() {
       mem0Button.setAttribute("aria-label", "Add memories to your prompt");
 
       const mem0Icon = document.createElement("img");
-      mem0Icon.src = chrome.runtime.getURL("icons/mem0-claude-icon-p.png");
-      mem0Icon.style.width = "20px";
-      mem0Icon.style.height = "20px";
-      mem0Icon.style.borderRadius = "50%";
+      mem0Icon.src = chrome.runtime.getURL("icons/CLabs_Logo_Beaker-BlackOnWhite_v2.svg");
+      mem0Icon.style.cssText = `
+        width: 20px;
+        height: 20px;
+      `;
 
       // Create notification dot
       const notificationDot = document.createElement('div');
@@ -613,6 +606,8 @@ function addMem0Button() {
         const buttonCenterX = rect.left + rect.width / 2;
         
         // Set initial tooltip properties
+        const tooltip = document.querySelector("#mem0-tooltip");
+        if (!tooltip) return;
         tooltip.style.display = "block";
         
         // Once displayed, we can get its height and set proper positioning
@@ -624,7 +619,7 @@ function addMem0Button() {
       
       mem0Button.addEventListener("mouseleave", () => {
         mem0Button.style.backgroundColor = "transparent";
-        popup.style.display = "none";
+        if (popup) popup.style.display = "none";
       });
 
       // Set popover text
@@ -698,6 +693,14 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   // Close existing modal if it exists
   if (memoryModalShown && currentModalOverlay) {
     document.body.removeChild(currentModalOverlay);
+  }
+
+  // Emit telemetry event
+  if (!isLoading) {
+    (async () => {
+      const telemetry = await import(chrome.runtime.getURL('utils/telemetry.js'));
+      telemetry.emit('memory_shown', { count: memoryItems.length, provider: 'claude' });
+    })();
   }
 
   memoryModalShown = true;
@@ -901,19 +904,17 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     align-items: center;
   `;
 
-  // Add Mem0 logo
+  // Add MemLoop logo
   const logoImg = document.createElement('img');
-  logoImg.src = chrome.runtime.getURL("icons/mem0-claude-icon.png");
+  logoImg.src = chrome.runtime.getURL("icons/CLabs_Logo_Beaker-BlackOnWhite_v2.svg");
   logoImg.style.cssText = `
     width: 26px;
     height: 26px;
-    border-radius: 50%;
-    margin-right: 10px;
   `;
 
-  // Add "OpenMemory" title
+  // Add "MemLoop" title
   const title = document.createElement('div');
-  title.textContent = "OpenMemory";
+  title.textContent = "MemLoop";
   title.style.cssText = `
     font-size: 16px;
     font-weight: 600;
@@ -1240,6 +1241,11 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
       // Add click handler for add button
       addButton.addEventListener('click', (e) => {
         e.stopPropagation();
+
+        (async () => {
+          const telemetry = await import(chrome.runtime.getURL('utils/telemetry.js'));
+          telemetry.emit('insert_clicked', { memory_id: memory.id, provider: 'claude' });
+        })();
 
         sendExtensionEvent("memory_injection", {
           provider: "claude",
@@ -1688,9 +1694,14 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
         return memory.text;
       });
     
+    (async () => {
+      const telemetry = await import(chrome.runtime.getURL('utils/telemetry.js'));
+      telemetry.emit('insert_clicked', { count: newMemories.length, all: true, provider: 'claude' });
+    })();
+
     sendExtensionEvent("memory_injection", {
       provider: "claude",
-      source: "OPENMEMORY_CHROME_EXTENSION",
+      source: "MEMLOOP_CHROME_EXTENSION",
       browser: getBrowser(),
       injected_all: true,
       memory_count: newMemories.length
@@ -2674,29 +2685,26 @@ function showLoginPopup() {
   `;
   
   const logo = document.createElement('img');
-  logo.src = chrome.runtime.getURL("icons/mem0-claude-icon.png");
+  logo.src = chrome.runtime.getURL("icons/CLabs_Logo_Beaker-BlackOnWhite_v2.svg");
   logo.style.cssText = `
     width: 24px;
     height: 24px;
-    border-radius: 50%;
-    margin-right: 12px;
   `;
 
   const logoDark = document.createElement('img');
-  logoDark.src = chrome.runtime.getURL("icons/mem0-icon-black.png");
+  logoDark.src = chrome.runtime.getURL("icons/CLabs_Logo_Beaker-BlackOnWhite_v2.svg");
   logoDark.style.cssText = `
     width: 24px;
     height: 24px;
-    border-radius: 50%;
-    margin-right: 12px;
   `;
   
   const heading = document.createElement('h2');
-  heading.textContent = 'Sign in to OpenMemory';
+  heading.textContent = 'Sign in to MemLoop';
   heading.style.cssText = `
     margin: 0;
     font-size: 18px;
     font-weight: 600;
+    color: var(--color-text-primary, #E1E1E3);
   `;
   
   logoContainer.appendChild(heading);
@@ -2706,7 +2714,7 @@ function showLoginPopup() {
   message.textContent = 'Please sign in to access your memories and personalize your conversations!';
   message.style.cssText = `
     margin-bottom: 24px;
-    color: #D4D4D8;
+    color: var(--color-text-secondary, #D4D4D8);
     font-size: 14px;
     line-height: 1.5;
     text-align: center;
@@ -2720,8 +2728,8 @@ function showLoginPopup() {
     justify-content: center;
     width: 100%;
     padding: 10px;
-    background-color: white;
-    color: black;
+    background-color: var(--color-primary, #4DB9A5);
+    color: var(--color-background, #131416);
     border: none;
     border-radius: 8px;
     font-size: 14px;
@@ -2732,23 +2740,30 @@ function showLoginPopup() {
   
   // Add text in span for better centering
   const signInText = document.createElement('span');
-  signInText.textContent = 'Sign in with Mem0';
+  signInText.textContent = 'Sign in';
   
   signInButton.appendChild(logoDark);
   signInButton.appendChild(signInText);
   
   signInButton.addEventListener('mouseenter', () => {
-    signInButton.style.backgroundColor = '#f5f5f5';
+    signInButton.style.backgroundColor = 'var(--color-secondary, #22D3EE)';
   });
-  
   signInButton.addEventListener('mouseleave', () => {
-    signInButton.style.backgroundColor = 'white';
+    signInButton.style.backgroundColor = 'var(--color-primary, #4DB9A5)';
   });
   
-  // Open sign-in page when clicked
-  signInButton.addEventListener('click', () => {
-    window.open('https://app.mem0.ai/login', '_blank');
-    document.body.removeChild(popupOverlay);
+  // Start Cognito sign-in via background
+  signInButton.addEventListener('click', async () => {
+    try {
+      await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: 'memloop_signin' }, (resp) => {
+          if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
+          if (!resp || !resp.ok) { reject(new Error((resp && resp.error) || 'signin_failed')); return; }
+          resolve(true);
+        });
+      });
+      document.body.removeChild(popupOverlay);
+    } catch (e) { console.warn('MemLoop signin failed:', e); }
   });
   
   // Assemble popup

@@ -1,0 +1,78 @@
+Title: CarouselLabs Memory Extension Port (mem0ai → CLabs internal)
+
+Summary
+Port the upstream mem0ai/mem0-chrome-extension (MV3) into a private CarouselLabs internal extension that authenticates with Cognito (Authorization Code + PKCE via chrome.identity.launchWebAuthFlow), calls a CLabs gateway, which forwards to our self-hosted Mem0. Replace API key+user ID with Cognito sign-in and short-lived JWTs. Keep MV3 structure, swap branding, minimize permissions, and deliver internal MVP with popup, context menu capture, minimal content scripts for ChatGPT/Claude, settings page, and optional side panel.
+
+Baseline Findings
+- Upstream: MV3, popup, context-menu, content scripts for ChatGPT/Claude/Perplexity/etc; Settings uses Mem0 API Key + User ID; MIT license.
+- Use chrome.identity.launchWebAuthFlow with Authorization Code + PKCE, redirect via chrome.identity.getRedirectURL(), works with Cognito Hosted UI.
+
+Scope (CLabs edition)
+A) Repo + packaging
+- Create private repo, import upstream, preserve LICENSE (MIT), add NOTICE.
+- Keep MV3; swap icons/name/description using CLabs assets.
+
+B) Config & environments
+- Replace API Key+User ID with: Environment (dev|staging|prod), Sign-in with CLabs (Cognito), Workspace/Tenant from token claims.
+- API base URL → CLabs gateway; never hard-code secrets.
+
+C) Auth: Cognito in Chrome extension
+- Implement Authorization Code + PKCE via chrome.identity.launchWebAuthFlow.
+- Build Hosted UI URL with response_type=code, code_challenge, scope=openid email profile, redirect_uri=browser.identity.getRedirectURL().
+- Exchange code→tokens via CLabs backend /auth/exchange (server-side secret); return short-lived access token for gateway; refresh on backend.
+
+D) CLabs gateway to self-hosted Mem0
+- Routes: POST /gateway/mem0/{tenant}/memories, GET /gateway/mem0/{tenant}/memories/search, etc.
+- Authenticate CLabs JWT (Cognito), resolve tenant from claims; forward to self-hosted Mem0 base.
+- Rate limit, log, WAF.
+
+E) Permissions & MV3 manifest
+- Minimal: storage, identity, contextMenus, activeTab; narrow host_permissions per AI site.
+
+F) UX (internal MVP)
+1) Popup: Sign-in button; show profile/tenant; quick "Save selection" with tags.
+2) Context menu: "Save to Carousel Memory" (selected text + URL).
+3) Side panel (optional): recent memories for current domain; insert into prompt.
+4) Content scripts: minimal DOM hooks for ChatGPT & Claude to insert a memories button.
+5) Settings: env toggle, privacy toggle, sign-out.
+
+G) Data model & tagging
+- Memory: { text, url, title, tags[], source:'chrome', tenant, userId(sub), createdAt }.
+- Auto-tag by domain; allow manual tags.
+
+H) Telemetry & privacy
+- No third-party analytics; minimal event counts via gateway; opt-out.
+
+Risks & mitigations
+- No secrets in bundle: PKCE + server-side exchange.
+- Host permissions creep: pin matchers; optional perms for new sites.
+- Token lifetime: short-lived; backend refresh; revoke on sign-out.
+- Upstream churn: isolate DOM selectors in adapters.
+
+Engineering Tasks
+Phase 0 — Spike
+- Read upstream code; list injected sites & selectors; confirm MV3 manifest & current permissions.
+- Stand up dev Cognito App Client; add extension redirect URI (getRedirectURL()).
+
+Phase 1 — Auth + Settings
+- Implement launchWebAuthFlow (+PKCE) → /auth/exchange → store access token+expiry in chrome.storage.session with TTL fallback.
+- Settings page: env switch, sign-in/out, tenant display.
+
+Phase 2 — Gateway
+- Add /gateway/mem0/... in API Gateway to forward to self-hosted Mem0; require JWT; map sub→Mem0 user.
+
+Phase 3 — Core features
+- Context-menu capture (selection + URL).
+- Popup save + recent memories.
+- Minimal content-script buttons for ChatGPT & Claude.
+
+Phase 4 — Hardening
+- Offline queue (IndexedDB) for saves while offline.
+- Host-permissions minimization; CSP review.
+- E2E tests (Puppeteer) across ChatGPT/Claude UIs.
+
+Phase 5 — Internal distribution
+- Zip for unpacked dev; later private listing in Chrome Web Store restricted to CLabs accounts.
+
+Appendix — Implementation Notes
+Auth sketch (TS): createPKCE, buildCognitoAuthUrl, exchangeCode; use chrome.identity.launchWebAuthFlow; store tokens in chrome.storage.session; fetch to gateway with Bearer.

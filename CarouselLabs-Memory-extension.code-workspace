@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../enterprise-packages"
+		},
+		{
+			"path": "../CarouselLabs-Frontend"
+		},
+		{
+			"path": "../TenantTerraform-clean"
+		}
+	],
+	"settings": {}
+}

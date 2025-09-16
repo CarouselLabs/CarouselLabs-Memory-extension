@@ -206,7 +206,8 @@ async function handleEnterKey(event) {
 }
 
 // Updated handleEnterKey with additional safety checks
-async function handleEnterKey(event) {
+// Rename the older duplicate if present to avoid redeclare
+async function handleEnterKeyLegacy(event) {
   try {
     // Safety check - only proceed if we can identify an input element
     const inputElement = getInputElement();
@@ -395,8 +396,7 @@ function initializeMem0Integration() {
           (async () => {
             try {
               await handleMem0Modal('mem0-icon-button');
-            } catch (e) {
-            }
+            } catch (e) { /* no-op */ }
           })();
         }
       });
@@ -609,13 +609,13 @@ function hookDeepseekBackgroundSearchTyping() {
 
 async function searchMemories(query) {
     try {
-      const items = await chrome.storage.sync.get(["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"]);
+      const items = await new Promise((resolve) => chrome.storage.sync.get(["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"], resolve));
       const userId = items.userId || items.user_id || "chrome-extension-user"; 
       const threshold = items.similarity_threshold !== undefined ? items.similarity_threshold : 0.1;
       const topK = items.top_k !== undefined ? items.top_k : 10;
 
       if (!items.access_token && !items.apiKey) {
-        return reject(new Error("Authentication details missing"));
+        throw new Error("Authentication details missing");
       }
 
       const optionalParams = {}
@@ -657,7 +657,7 @@ async function searchMemories(query) {
       });
 
       if (!response.ok) {
-        return reject(new Error(`HTTP error! status: ${response.status}`));
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
@@ -680,72 +680,73 @@ async function searchMemories(query) {
 
 
 function addMemory(memoryText) {
-  return new Promise(async (resolve, reject) => {
+  return new Promise((resolve, reject) => {
     try {
-      const items = await chrome.storage.sync.get(["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id"]);
-      const userId = items.userId || items.user_id || "chrome-extension-user"; 
+      chrome.storage.sync.get(["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id"], (items) => {
+        const userId = items.userId || items.user_id || "chrome-extension-user"; 
 
-      if (!items.access_token && !items.apiKey) {
-        console.error("No API Key or Access Token found for adding memory.");
-        return reject(new Error("Authentication details missing"));
-      }
+        if (!items.access_token && !items.apiKey) {
+          console.error("No API Key or Access Token found for adding memory.");
+          return reject(new Error("Authentication details missing"));
+        }
 
-      const optionalParams = {}
-      if(items.selected_org) {
-        optionalParams.org_id = items.selected_org;
-      }
-      if(items.selected_project) {
-        optionalParams.project_id = items.selected_project;
-      }
-      
-      const headers = {
-        'Content-Type': 'application/json',
-      };
-       if (items.access_token) {
+        const optionalParams = {}
+        if(items.selected_org) {
+          optionalParams.org_id = items.selected_org;
+        }
+        if(items.selected_project) {
+          optionalParams.project_id = items.selected_project;
+        }
+        
+        const headers = {
+          'Content-Type': 'application/json',
+        };
+        if (items.access_token) {
           headers['Authorization'] = `Bearer ${items.access_token}`;
-      } else {
+        } else {
           headers['Authorization'] = `Api-Key ${items.apiKey}`; 
-      }
+        }
 
-      const url = `${MEM0_API_BASE_URL}/v1/memories/`;
-      const body = JSON.stringify({
-        messages: [
-          {
-            role: "user",
-            content: memoryText
+        const url = `${MEM0_API_BASE_URL}/v1/memories/`;
+        const body = JSON.stringify({
+          messages: [
+            {
+              role: "user",
+              content: memoryText
+            }
+          ],
+          user_id: userId,
+          source: "OPENMEMORY_CHROME_EXTENSION",
+          ...optionalParams,
+        });
+
+        fetch(url, {
+          method: 'POST',
+          headers: headers,
+          body: body
+        })
+        .then(response => {
+          if (!response.ok) {
+            return response.json().then(errorData => {
+              console.error("Mem0 API Add Memory Error Response Body:", errorData);
+              throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+            }).catch(parseError => {
+              console.error("Failed to parse add memory error response body:", parseError);
+              throw new Error(`HTTP error! status: ${response.status}`);
+            });
           }
-        ],
-        user_id: userId,
-        source: "OPENMEMORY_CHROME_EXTENSION",
-        ...optionalParams,
-      });
-
-      fetch(url, {
-        method: 'POST',
-        headers: headers,
-        body: body
-      })
-      .then(response => {
-        if (!response.ok) {
-           return response.json().then(errorData => {
-            console.error("Mem0 API Add Memory Error Response Body:", errorData);
-            throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
-         }).catch(parseError => {
-            console.error("Failed to parse add memory error response body:", parseError);
-            throw new Error(`HTTP error! status: ${response.status}`);
-         });
-        }
-        if (response.status === 204) { 
+          if (response.status === 204) { 
             return null;
-        }
-        return response.json();
-      })
-      .then(data => {
-        resolve(data);
-      })
-      .catch(error => {
-        console.error("Error adding memory directly:", error);
-        reject(error); 
+          }
+          return response.json();
+        })
+        .then(data => {
+          resolve(data);
+        })
+        .catch(error => {
+          console.error("Error adding memory directly:", error);
+          reject(error); 
+        });
       });
 
     } catch (error) {
@@ -826,14 +827,12 @@ async function triggerSendAction() {
             }
           }, 500);
           
-        } catch (error) {
-    }
+        } catch (error) { /* no-op */ }
   } else {
-      }
-    } else {
-    }
-  } catch (e) {
   }
+    } else {
+  }
+  } catch (e) { /* no-op */ }
 }
 
 async function handleMem0Processing() {
@@ -1041,7 +1040,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 
   // Add Mem0 logo
   const logoImg = document.createElement('img');
-  logoImg.src = chrome.runtime.getURL("icons/mem0-claude-icon.png");
+  logoImg.src = chrome.runtime.getURL("icons/clabs-logo.svg");
   logoImg.style.cssText = `
     width: 26px;
     height: 26px;
@@ -1049,9 +1048,9 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     margin-right: 10px;
   `;
 
-  // OpenMemory titel
+  // MemLoop title
   const title = document.createElement('div');
-  title.textContent = "OpenMemory";
+  title.textContent = "MemLoop";
   title.style.cssText = `
     font-size: 16px;
     font-weight: 600;
@@ -2051,7 +2050,7 @@ function showLoginModal() {
   `;
   
   const logo = document.createElement('img');
-  logo.src = chrome.runtime.getURL("icons/mem0-claude-icon.png");
+  logo.src = chrome.runtime.getURL("icons/clabs-logo.svg");
   logo.style.cssText = `
     width: 24px;
     height: 24px;
@@ -2060,7 +2059,7 @@ function showLoginModal() {
   `;
 
   const logoDark = document.createElement('img');
-  logoDark.src = chrome.runtime.getURL("icons/mem0-icon-black.png");
+  logoDark.src = chrome.runtime.getURL("icons/clabs-logo.svg");
   logoDark.style.cssText = `
     width: 24px;
     height: 24px;
@@ -2069,7 +2068,7 @@ function showLoginModal() {
   `;
   
   const heading = document.createElement('h2');
-  heading.textContent = 'Sign in to OpenMemory';
+  heading.textContent = 'Sign in to MemLoop';
   heading.style.cssText = `
     margin: 0;
     font-size: 18px;
@@ -2097,8 +2096,8 @@ function showLoginModal() {
     justify-content: center;
     width: 100%;
     padding: 10px;
-    background-color: white;
-    color: black;
+    background-color: var(--color-primary, #4DB9A5);
+    color: var(--color-background, #131416);
     border: none;
     border-radius: 8px;
     font-size: 14px;
@@ -2109,32 +2108,34 @@ function showLoginModal() {
   
   // Add text in span for better centering
   const signInText = document.createElement('span');
-  signInText.textContent = 'Sign in with Mem0';
+  signInText.textContent = 'Sign in';
   
   signInButton.appendChild(logoDark);
   signInButton.appendChild(signInText);
   
   signInButton.addEventListener('mouseenter', () => {
-    signInButton.style.backgroundColor = '#f5f5f5';
+    signInButton.style.backgroundColor = 'var(--color-secondary, #22D3EE)';
   });
   
   signInButton.addEventListener('mouseleave', () => {
-    signInButton.style.backgroundColor = 'white';
+    signInButton.style.backgroundColor = 'var(--color-primary, #4DB9A5)';
   });
   
-  // Open sign-in page when clicked
-  signInButton.addEventListener('click', () => {
-    // Send message to background script to handle authentication
-    chrome.runtime.sendMessage({ action: "showLoginPopup" }, (response) => {
-      if (chrome.runtime.lastError) {
-        
-        // Fallback: open the login page directly
-        window.open('https://app.mem0.ai/login', '_blank');
-      }
-    });
-    
-    // Close the modal
-    document.body.removeChild(popupOverlay);
+  // Start Cognito sign-in via background
+  signInButton.addEventListener('click', async () => {
+    try {
+      await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: 'memloop_signin' }, (resp) => {
+          if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
+          if (!resp || !resp.ok) { reject(new Error((resp && resp.error) || 'signin_failed')); return; }
+          resolve(true);
+        });
+      });
+      document.body.removeChild(popupOverlay);
+    } catch (e) {
+      // fallback UI stays open so user can try again
+      console.warn('MemLoop signin failed:', e);
+    }
   });
   
   // Assemble popup
@@ -2369,7 +2370,7 @@ function addMem0IconButton() {
     
     // Create the icon
     const icon = document.createElement('img');
-    icon.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
+    icon.src = chrome.runtime.getURL('icons/clabs-logo.svg');
     icon.style.cssText = `
       width: 14px;
       height: 14px;
@@ -2587,10 +2588,9 @@ function addSendButtonListener() {
           allMemoriesById.clear();
         }, 100);
       });
-    } else {
-    }
+    } else { /* no-op */ }
   } else {
-  }
+  /* no-op */ }
 }
 
 // Call the initialization function
