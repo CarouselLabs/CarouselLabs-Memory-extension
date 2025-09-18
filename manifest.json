@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
   "name": "MemLoop",
-  "version": "1.4.0",
+  "version": "1.4.24",
   "description": "MemLoop keeps your conversations in sync. 🔄 No more repeating yourself—just seamless AI collaboration! ✨",
   "icons": {
-    "16": "icons/CLabs_Logo_Beaker-BlackOnWhite_v2.svg",
-    "48": "icons/CLabs_Logo_Beaker-BlackOnWhite_v2.svg",
-    "128": "icons/CLabs_Logo_Beaker-BlackOnWhite_v2.svg"
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
   },
   "permissions": ["storage", "activeTab", "contextMenus", "scripting", "webNavigation", "webRequest", "identity"],
   "host_permissions": [
@@ -18,9 +18,9 @@
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
-      "16": "icons/CLabs_Logo_Beaker-BlackOnWhite_v2.svg",
-      "48": "icons/CLabs_Logo_Beaker-BlackOnWhite_v2.svg",
-      "128": "icons/CLabs_Logo_Beaker-BlackOnWhite_v2.svg"
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
     }
   },
   "options_ui": {
@@ -93,7 +93,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["icons/*", "themes/generated/*.css", "utils/structured_logger.js", "config/auth.defaults.json"],
+      "resources": ["icons/*", "themes/generated/*.css", "utils/structured_logger.js", "config/auth.defaults.json", "debug-auth.html"],
       "matches": ["<all_urls>"]
     }
   ]

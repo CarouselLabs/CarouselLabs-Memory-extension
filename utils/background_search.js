@@ -1,14 +1,14 @@
-var OPENMEMORY_SEARCH = (typeof OPENMEMORY_SEARCH != 'undefined') ? OPENMEMORY_SEARCH: {}; 
+var MEMLOOP_SEARCH = (typeof MEMLOOP_SEARCH != 'undefined') ? MEMLOOP_SEARCH: {}; 
 
-OPENMEMORY_SEARCH.normalizeQuery = function (s) {
+MEMLOOP_SEARCH.normalizeQuery = function (s) {
     if (!s) return ""; 
     return String(s).trim().replace(/\s+/g, ' ').toLowerCase(); 
 }; 
 
-OPENMEMORY_SEARCH.createOrchestrator = function (options) {
+MEMLOOP_SEARCH.createOrchestrator = function (options) {
     var fetchFn = options && options.fetch
     if (typeof fetchFn !== 'function') {
-        throw new Error("OPENMEMORY_SEARCH.createOrchestrator requires options.fetch(query, { signal })");
+        throw new Error("MEMLOOP_SEARCH.createOrchestrator requires options.fetch(query, { signal })");
     }
 
     var onStart = options.onStart || function () {}; 
@@ -91,7 +91,7 @@ OPENMEMORY_SEARCH.createOrchestrator = function (options) {
 
     function run(query) {
         var raw = ( query != null ) ? String(query): latestText; 
-        var norm = OPENMEMORY_SEARCH.normalizeQuery(raw); 
+        var norm = MEMLOOP_SEARCH.normalizeQuery(raw); 
         if (!norm || norm.length < minLength) return; 
 
         var cached = getCached(norm); 
@@ -140,7 +140,7 @@ OPENMEMORY_SEARCH.createOrchestrator = function (options) {
 
     function schedule() {
         clearTimer(); 
-        if (!latestText || OPENMEMORY_SEARCH.normalizeQuery(latestText).length < minLength) return; 
+        if (!latestText || MEMLOOP_SEARCH.normalizeQuery(latestText).length < minLength) return; 
         timerId = setTimeout(function () {
             timerId = null;
             run(latestText);

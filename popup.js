@@ -62,6 +62,23 @@ document.addEventListener("DOMContentLoaded", function () {
         chrome.runtime.openOptionsPage();
         window.close();
       });
+      
+      const openDebugBtn = document.getElementById('openDebugBtn');
+      if (openDebugBtn) openDebugBtn.addEventListener('click', () => {
+        chrome.tabs.create({ url: chrome.runtime.getURL('debug-auth.html') });
+        window.close();
+      });
+      
+      // Logo loading handlers
+      const logoImg = document.getElementById('logoImg');
+      if (logoImg) {
+        logoImg.addEventListener('load', () => {
+          console.log('✅ Logo loaded successfully');
+        });
+        logoImg.addEventListener('error', (e) => {
+          console.error('❌ Logo failed to load:', e.target.src);
+        });
+      }
 
       // Fetch memories
       fetchAndRenderMemories();

@@ -1,17 +1,18 @@
 {
   "name": "carousellabs-memloop-extension",
   "private": true,
-  "version": "1.4.0",
+  "version": "1.4.24",
   "description": "Local tooling for linting the MemLoop extension code",
   "scripts": {
     "lint": "eslint . --ext .js",
     "lint:fix": "eslint . --ext .js --fix",
-    "seed-config": "node scripts/seed-config.js",
-    "seed-config:staging": "STAGE=staging node scripts/seed-config.js",
-    "seed-config:prod": "STAGE=prod node scripts/seed-config.js"
+    "seed-config": "SERVICE=mem0 ssm-seed-config",
+    "seed-config:staging": "STAGE=staging SERVICE=mem0 ssm-seed-config",
+    "seed-config:prod": "STAGE=prod SERVICE=mem0 ssm-seed-config"
   },
   "devDependencies": {
-    "eslint": "^8.57.0"
+    "eslint": "^8.57.0",
+    "@carousellabs/ssm-config-seeder": "file:../enterprise-packages/packages/core/ssm-config-seeder"
   }
 }
 

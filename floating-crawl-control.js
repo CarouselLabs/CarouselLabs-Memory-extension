@@ -77,7 +77,7 @@
       transform: translateY(-50%) !important;
       width: 60px !important;
       height: 60px !important;
-      background: linear-gradient(135deg, var(--colors-mint-400), var(--colors-cyan-300)) !important;
+      background: #4DB9A5 !important;
       border-radius: 50% !important;
       box-shadow: 0 4px 20px rgba(77, 185, 165, 0.4) !important;
       cursor: pointer !important;
@@ -93,16 +93,12 @@
     // Create CarouselLabs beaker logo
     const iconSvg = document.createElement('div');
     iconSvg.innerHTML = `
-      <svg width="28" height="28" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <!-- CarouselLabs Beaker Icon -->
-        <path d="M35 25V15C35 12.2386 37.2386 10 40 10H60C62.7614 10 65 12.2386 65 15V25" stroke="white" stroke-width="3" fill="none"/>
-        <path d="M40 25L30 60C28.5 65 32 70 37 70H63C68 70 71.5 65 70 60L60 25" stroke="white" stroke-width="3" fill="none"/>
-        <circle cx="45" cy="45" r="3" fill="white" opacity="0.8"/>
-        <circle cx="55" cy="52" r="2" fill="white" opacity="0.6"/>
-        <circle cx="50" cy="58" r="2.5" fill="white" opacity="0.7"/>
-        <!-- Bubbles for activity -->
-        <circle cx="52" cy="40" r="1.5" fill="white" opacity="0.5"/>
-        <circle cx="48" cy="35" r="1" fill="white" opacity="0.4"/>
+      <svg width="28" height="38" viewBox="0 0 477 659" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M156.696 223.161C146.724 223.161 132.701 225.519 131.121 212.347C129.986 202.847 129.941 188.807 141.983 187.405C149.685 186.493 171.342 186.471 178.932 187.561C187.502 188.785 193 196.372 193.779 204.627C196.695 235.754 191.954 272.044 193.156 303.661L43.6669 558.845C26.6614 589.038 42.643 617.518 76.8545 620.188H401.296C425.469 619.164 443.876 602.433 441.45 577.401C440.315 565.698 429.72 550.657 423.799 540.155C378.636 459.944 327.598 382.759 284.705 301.369C286.197 270.642 281.678 236.177 284.349 205.895C285.106 197.395 290.114 188.918 299.173 187.517C306.385 186.404 328.621 186.560 336.145 187.405C348.454 188.785 349.745 201.957 348.164 212.236C346.117 225.564 332.873 223.317 322.701 223.161V296.563C366.839 376.507 419.904 453.915 462.908 534.237C494.849 593.844 469.652 646.354 403.766 658.413L74.2948 658.48C16.4669 654.097 -18.7907 592.442 12.1933 541.423L156.696 295.295V223.183V223.161Z" fill="white"/>
+        <path d="M257.347 428.721C242.7 424.71 228.071 422.892 213.323 427.557C165.268 442.77 146.988 507.596 185.028 542.584C225.175 579.534 284.602 557.091 297.291 505.865C300.342 493.547 293.3 473.424 309.714 470.234C327.612 466.746 331.246 483.334 330.55 496.96C325.016 606.219 168.624 629.715 135.726 523.318C111.125 443.728 196.426 364.183 273.278 401.128C279.18 386.988 293.5 368.639 300.024 393.576C303.596 407.2 304.632 422.545 308.841 436.177C309.215 439.938 307.358 444.133 304.013 445.875L254.274 459.062C249.38 459.705 244.383 451.219 246.286 447.924L257.377 428.713L257.347 428.721Z" fill="white"/>
+        <path d="M221.068 174.056C241.806 174.056 258.618 157.25 258.618 136.52C258.618 115.79 241.806 98.9844 221.068 98.9844C200.329 98.9844 183.518 115.79 183.518 136.52C183.518 157.25 200.329 174.056 221.068 174.056Z" fill="white"/>
+        <path d="M275.948 94.4979C289.382 94.4979 300.272 83.612 300.272 70.1835C300.272 56.7551 289.382 45.8691 275.948 45.8691C262.515 45.8691 251.625 56.7551 251.625 70.1835C251.625 83.612 262.515 94.4979 275.948 94.4979Z" fill="white"/>
+        <path d="M243.594 32.917C252.576 32.917 259.856 25.6392 259.856 16.6616C259.856 7.68403 252.576 0.40625 243.594 0.40625C234.613 0.40625 227.333 7.68403 227.333 16.6616C227.333 25.6392 234.613 32.917 243.594 32.917Z" fill="white"/>
       </svg>
     `;
     iconSvg.style.cssText = `
@@ -111,6 +107,7 @@
       align-items: center !important;
       justify-content: center !important;
       filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1)) !important;
+      margin-top: -4px !important;
     `;
 
     floatingButton.appendChild(iconSvg);
@@ -119,13 +116,13 @@
     floatingButton.addEventListener('mouseenter', () => {
       floatingButton.style.transform = 'translateY(-50%) scale(1.1) !important';
       floatingButton.style.boxShadow = '0 6px 25px rgba(77, 185, 165, 0.6) !important';
-      floatingButton.style.background = 'linear-gradient(135deg, var(--colors-cyan-300), var(--colors-mint-400)) !important';
+      floatingButton.style.background = '#17D8FD !important'; // Cyan on hover
     });
 
     floatingButton.addEventListener('mouseleave', () => {
       floatingButton.style.transform = 'translateY(-50%) scale(1) !important';
       floatingButton.style.boxShadow = '0 4px 20px rgba(77, 185, 165, 0.4) !important';
-      floatingButton.style.background = 'linear-gradient(135deg, var(--colors-mint-400), var(--colors-cyan-300)) !important';
+      floatingButton.style.background = '#4DB9A5 !important'; // Back to mint
     });
 
     // Add click event to show crawl control panel
@@ -182,6 +179,23 @@
             transform: translateY(-50%) translateX(0);
           }
         }
+        
+        /* Placeholder text styling for textarea */
+        #additional-context::placeholder {
+          color: var(--light-colors-gray-400) !important;
+          opacity: 1 !important;
+        }
+        
+        /* Firefox placeholder styling */
+        #additional-context::-moz-placeholder {
+          color: var(--light-colors-gray-400) !important;
+          opacity: 1 !important;
+        }
+        
+        /* Webkit placeholder styling */
+        #additional-context::-webkit-input-placeholder {
+          color: var(--light-colors-gray-400) !important;
+        }
       `;
       document.head.appendChild(style);
     }
@@ -189,14 +203,27 @@
     panel.innerHTML = `
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--spacing-4);">
         <div style="display: flex; align-items: center; gap: 12px;">
-          <svg width="24" height="24" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M35 25V15C35 12.2386 37.2386 10 40 10H60C62.7614 10 65 12.2386 65 15V25" stroke="currentColor" stroke-width="3" fill="none"/>
-            <path d="M40 25L30 60C28.5 65 32 70 37 70H63C68 70 71.5 65 70 60L60 25" stroke="currentColor" stroke-width="3" fill="none"/>
-            <circle cx="45" cy="45" r="3" fill="currentColor" opacity="0.8"/>
-            <circle cx="55" cy="52" r="2" fill="currentColor" opacity="0.6"/>
-            <circle cx="50" cy="58" r="2.5" fill="currentColor" opacity="0.7"/>
-          </svg>
-          <h3 style="margin: 0; font-size: 18px; font-weight: 600; font-family: var(--typography-h3-font-family); background: linear-gradient(135deg, var(--colors-mint-400), var(--colors-cyan-300)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">Crawl Page</h3>
+          <h3 style="margin: 0; font-size: 18px; font-weight: 600; font-family: var(--typography-h3-font-family); background: linear-gradient(135deg, var(--colors-mint-400), var(--colors-cyan-300)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; display: flex; align-items: center; gap: 8px;">
+            <svg width="20" height="20" viewBox="0 0 477 680" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <g clip-path="url(#clip0_121_65)">
+                <path d="M156.511 244.161C146.539 244.161 132.516 246.519 130.935 233.347C129.8 223.847 129.756 209.807 141.798 208.405C149.499 207.493 171.157 207.471 178.747 208.561C187.316 209.785 192.814 217.372 193.593 225.627C196.509 256.754 191.768 293.044 192.97 324.661L43.4814 579.845C26.4758 610.038 42.4575 638.518 76.6689 641.188H401.11C425.283 640.164 443.691 623.433 441.265 598.401C440.129 586.698 429.534 571.657 423.614 561.155C378.451 480.944 327.412 403.759 284.52 322.369C286.011 291.642 281.493 257.177 284.164 226.895C284.92 218.395 289.929 209.918 298.988 208.517C306.2 207.404 328.436 207.56 335.959 208.405C348.268 209.785 349.559 222.957 347.979 233.236C345.931 246.564 332.687 244.317 322.515 244.161V317.563C366.654 397.507 419.718 474.915 462.722 555.237C494.663 614.844 469.466 667.354 403.581 679.413L74.1092 679.48C16.2814 675.097 -18.9762 613.442 12.0077 562.423L156.511 316.295V244.183V244.161Z" fill="white"/>
+                <path d="M257.161 449.721C242.514 445.71 227.885 443.892 213.138 448.557C165.082 463.77 146.803 528.596 184.843 563.584C224.989 600.534 284.416 578.091 297.105 526.865C300.156 514.547 293.114 494.424 309.529 491.234C327.427 487.746 331.06 504.334 330.364 517.96C324.831 627.219 168.439 650.715 135.541 544.318C110.94 464.728 196.241 385.183 273.092 422.128C278.994 407.988 293.315 389.639 299.839 414.576C303.411 428.2 304.446 443.545 308.656 457.177C309.029 460.938 307.173 465.133 303.828 466.875L254.089 480.062C249.194 480.705 244.198 472.219 246.1 468.924L257.192 449.713L257.161 449.721Z" fill="white"/>
+                <path d="M220.882 195.056C241.621 195.056 258.433 178.25 258.433 157.52C258.433 136.79 241.621 119.984 220.882 119.984C200.144 119.984 183.332 136.79 183.332 157.52C183.332 178.25 200.144 195.056 220.882 195.056Z" fill="white"/>
+                <path d="M275.763 115.498C289.197 115.498 300.087 104.612 300.087 91.1835C300.087 77.7551 289.197 66.8691 275.763 66.8691C262.329 66.8691 251.439 77.7551 251.439 91.1835C251.439 104.612 262.329 115.498 275.763 115.498Z" fill="white"/>
+                <path d="M243.409 53.917C252.39 53.917 259.671 46.6392 259.671 37.6616C259.671 28.684 252.39 21.4062 243.409 21.4062C234.428 21.4062 227.147 28.684 227.147 37.6616C227.147 46.6392 234.428 53.917 243.409 53.917Z" fill="white"/>
+              </g>
+              <defs>
+                <linearGradient id="beaker-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#4DB9A5"/>
+                  <stop offset="100%" style="stop-color:#22D3EE"/>
+                </linearGradient>
+                <clipPath id="clip0_121_65">
+                  <rect width="476" height="679" fill="none" transform="translate(0.5 0.480469)"/>
+                </clipPath>
+              </defs>
+            </svg>
+            Crawl Page
+          </h3>
         </div>
         <button id="close-crawl-panel" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--light-colors-gray-400); padding: 0; width: 24px; height: 24px; transition: color 0.2s;">×</button>
       </div>
@@ -410,11 +437,11 @@
     } catch (error) {
       console.error('Crawl request failed:', error);
       statusText.innerHTML = `
-        <div style="color: #dc3545; font-weight: 500;">✗ Crawl failed</div>
-        <div style="font-size: 12px; color: #666; margin-top: 4px;">${error.message}</div>
+        <div style="color: var(--colors-red-400); font-weight: 500;">✗ Crawl failed</div>
+        <div style="font-size: 12px; color: var(--light-colors-gray-400); margin-top: 4px;">${error.message}</div>
       `;
       progressFill.style.width = '0%';
-      progressFill.style.background = '#dc3545';
+      progressFill.style.background = 'var(--colors-red-400)';
     } finally {
       // Re-enable button
       startButton.disabled = false;

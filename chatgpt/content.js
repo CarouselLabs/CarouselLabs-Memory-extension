@@ -22,15 +22,16 @@ let currentModalSourceButtonId = null;
 
   var chatgptSearch = MEMLOOP_SEARCH.createOrchestrator({
     fetch: async function(query, opts) {
-      const auth = await import(chrome.runtime.getURL('utils/auth.js'));
-      const gateway = await import(chrome.runtime.getURL('utils/mem0_gateway.js'));
-      
-      const token = await auth.getAccessToken();
-      if (!token) return [];
+      // Get token via service worker
+      const tokenResponse = await chrome.runtime.sendMessage({ type: 'memloop_get_token' });
+      if (!tokenResponse?.ok || !tokenResponse.token) return [];
 
-      // Get context for the current tab
-      const contextScope = await import(chrome.runtime.getURL('utils/context_scope_adapter.js'));
-      const context = await contextScope.getContext({});
+      // Get context via service worker
+      const contextResponse = await chrome.runtime.sendMessage({ 
+        type: 'memloop_get_context', 
+        data: { params: {} }
+      });
+      const context = contextResponse?.ok ? contextResponse.context : {};
       
       const searchParams = {
         q: query,
@@ -41,22 +42,39 @@ let currentModalSourceButtonId = null;
         offset: 0,
       };
       
-      return gateway.searchMemories(searchParams);
+      // Search memories via service worker
+      const searchResponse = await chrome.runtime.sendMessage({
+        type: 'memloop_search_memories',
+        data: { searchParams }
+      });
+      
+      return searchResponse?.ok ? searchResponse.results : [];
     },
   
     // Don't render on prefetch. When modal is open, update it.
     onSuccess: async function(normQuery, responseData) {
       if (!memoryModalShown) return;
       
-      const ranking = await import(chrome.runtime.getURL('utils/ranking.js'));
-      const contextScope = await import(chrome.runtime.getURL('utils/context_scope_adapter.js'));
-      const context = await contextScope.getContext({});
-      
-      const rankedItems = ranking.rankAndSort(responseData.items || [], {
-        q: normQuery,
-        domain: context.domain?.name,
-        pathPrefix: context.route?.path,
+      // Get context via service worker
+      const contextResponse = await chrome.runtime.sendMessage({ 
+        type: 'memloop_get_context', 
+        data: { params: {} }
       });
+      const context = contextResponse?.ok ? contextResponse.context : {};
+      
+      // Rank memories via service worker
+      const rankingResponse = await chrome.runtime.sendMessage({
+        type: 'memloop_rank_memories',
+        data: { 
+          memories: responseData.items || [], 
+          context: {
+            q: normQuery,
+            domain: context.domain?.name,
+            pathPrefix: context.route?.path,
+          }
+        }
+      });
+      const rankedItems = rankingResponse?.ok ? rankingResponse.rankedMemories : (responseData.items || []);
 
       const memoryItems = (rankedItems || []).map(item => ({
         id: item.id,
@@ -85,8 +103,10 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   // Emit telemetry event
   if (!isLoading) {
     (async () => {
-      const telemetry = await import(chrome.runtime.getURL('utils/telemetry.js'));
-      telemetry.emit('memory_shown', { count: memoryItems.length, provider: 'chatgpt' });
+      chrome.runtime.sendMessage({ 
+        type: 'memloop_emit_telemetry', 
+        data: { event: 'memory_shown', data: { count: memoryItems.length, provider: 'chatgpt' } }
+      });
     })();
   }
 
@@ -666,8 +686,10 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
         e.stopPropagation();
 
         (async () => {
-          const telemetry = await import(chrome.runtime.getURL('utils/telemetry.js'));
-          telemetry.emit('insert_clicked', { memory_id: memory.id, provider: 'chatgpt' });
+          chrome.runtime.sendMessage({ 
+            type: 'memloop_emit_telemetry', 
+            data: { event: 'insert_clicked', data: { memory_id: memory.id, provider: 'chatgpt' } }
+          });
         })();
 
         sendExtensionEvent("memory_injection", {
@@ -1034,8 +1056,10 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
       });
 
     (async () => {
-      const telemetry = await import(chrome.runtime.getURL('utils/telemetry.js'));
-      telemetry.emit('insert_clicked', { count: newMemories.length, all: true, provider: 'chatgpt' });
+      chrome.runtime.sendMessage({ 
+        type: 'memloop_emit_telemetry', 
+        data: { event: 'insert_clicked', data: { count: newMemories.length, all: true, provider: 'chatgpt' } }
+      });
     })();
 
     sendExtensionEvent("memory_injection", {
@@ -1239,39 +1263,20 @@ async function captureAndStoreMemory() {
   if (!message || message.trim() === '') return;
   
   try {
-    const auth = await import(chrome.runtime.getURL('utils/auth.js'));
-    const token = await auth.getAccessToken();
-    if (!token) return; // Not signed in, do nothing
-
-    const settings = await new Promise(r => chrome.storage.sync.get(["memory_enabled", "domainBlacklist"], items => r(items || {})));
-    if (settings.memory_enabled === false) return;
+    // Use message passing to service worker instead of dynamic imports
+    const response = await chrome.runtime.sendMessage({
+      type: 'memloop_save_memory',
+      data: {
+        message: message,
+        provider: 'ChatGPT',
+        url: window.location.href,
+        messages: getLastMessages(2)
+      }
+    });
     
-    const url = window.location.href;
-    if (settings.domainBlacklist && settings.domainBlacklist.some(d => url.includes(d))) {
-      return; // Domain is blacklisted
+    if (response && response.error) {
+      console.error("MemLoop: Error saving memory:", response.error);
     }
-
-    const gateway = await import(chrome.runtime.getURL('utils/mem0_gateway.js'));
-    const contextScope = await import(chrome.runtime.getURL('utils/context_scope_adapter.js'));
-    const telemetry = await import(chrome.runtime.getURL('utils/telemetry.js'));
-
-    const context = await contextScope.getContext({});
-    
-    const messages = getLastMessages(2);
-    messages.push({ role: "user", content: message });
-
-    const body = {
-      messages: messages,
-      metadata: {
-        provider: "ChatGPT",
-        context: context,
-        tags: context.tags,
-      },
-      source: "MEMLOOP_CHROME_EXTENSION",
-    };
-    
-    await gateway.saveMemory(body);
-    await telemetry.emit('memory_saved', { provider: 'chatgpt', source: 'MEMLOOP_CHROME_EXTENSION' });
 
   } catch (error) {
     console.error("MemLoop: Error saving memory:", error);
@@ -1745,9 +1750,9 @@ async function handleMem0Modal(sourceButtonId = null) {
     return;
   }
 
-  // Check if user is logged in via our auth util
-  const auth = await import(chrome.runtime.getURL('utils/auth.js'));
-  const token = await auth.getAccessToken();
+  // Check if user is logged in via service worker message
+  const tokenResponse = await chrome.runtime.sendMessage({ type: 'memloop_get_token' });
+  const token = tokenResponse?.ok ? tokenResponse.token : null;
 
   // If no token, show login popup
   if (!token) {

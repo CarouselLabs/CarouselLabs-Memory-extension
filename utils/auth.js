@@ -63,9 +63,17 @@ import * as telemetry from './telemetry.js';
 export async function signInWithCognito({ domain, clientId, scopes = ["openid","email","profile"], exchangeUrl, tenantClaim = "custom:tenant" }) {
   try {
     telemetry.emit('signin_started');
+    
+    // Validate required parameters
+    if (!domain) throw new Error('Missing required parameter: domain');
+    if (!clientId) throw new Error('Missing required parameter: clientId');
+    if (!exchangeUrl) throw new Error('Missing required parameter: exchangeUrl');
+    
+    console.log('🔍 [OAuth Debug] Input parameters:', { domain, clientId, exchangeUrl, scopes });
 
     const { verifier, challenge } = await generatePkce();
     const redirectUri = chrome.identity.getRedirectURL();
+    console.log('🔍 [OAuth Debug] Extension redirect URI:', redirectUri);
     const params = new URLSearchParams({
       response_type: "code",
       client_id: clientId,
@@ -85,6 +93,17 @@ export async function signInWithCognito({ domain, clientId, scopes = ["openid","
       authDomain = authDomain.replace(/^https?:\/\//, "");
     }
     const authUrl = `https://${authDomain}/oauth2/authorize?${params.toString()}`;
+    
+    // Debug logging for OAuth parameters
+    console.log('🔍 [OAuth Debug] Full auth URL:', authUrl);
+    console.log('🔍 [OAuth Debug] Parameters:', {
+      response_type: params.get('response_type'),
+      client_id: params.get('client_id'),
+      redirect_uri: params.get('redirect_uri'),
+      scope: params.get('scope'),
+      code_challenge_method: params.get('code_challenge_method'),
+      code_challenge: params.get('code_challenge')
+    });
 
     async function tryTabFallback(authUrl, redirectUri, clientId, authDomain){
       return new Promise((resolve, reject) => {

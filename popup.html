@@ -54,6 +54,11 @@
         height: 48px;
         margin-bottom: var(--spacing-4);
         filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+        /* Ensure SVG is visible on dark background */
+        background: transparent;
+        border: none;
+        /* Debug: add a subtle border to see if element is there */
+        /* border: 1px solid rgba(255, 255, 255, 0.1); */
       }
       .typography-logo {
         width: 180px;
@@ -200,7 +205,7 @@
       <div id="signedOutView">
         <div class="logo-container">
           <!-- Option 1: Beaker + MemLoop text + subtitle -->
-          <img src="icons/CLabs_Logo_Beaker-WhiteOnBlack_v2.svg" alt="CarouselLabs Beaker" class="logo">
+          <img src="icons/CLabs_Logo_Beaker-WhiteOnBlack_v2.svg" alt="CarouselLabs Beaker" class="logo" id="logoImg">
           <h1 class="brand-title">MemLoop</h1>
           <p class="brand-subtitle">empowered by CarouselLabs</p>
           
@@ -252,6 +257,7 @@
 
         <button id="openSidebarBtn" class="button" style="margin-top:20px;">Open Full View</button>
         <button id="openSettingsBtn" class="button button-secondary" style="margin-top:10px;">Settings</button>
+        <button id="openDebugBtn" class="button button-secondary" style="margin-top:10px;">🔍 Debug Auth</button>
       </div>
     </div>
     <script src="popup.js"></script>

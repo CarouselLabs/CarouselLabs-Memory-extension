@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>MemLoop Auth Debug</title>
+  <style>
+    body { font-family: monospace; margin: 20px; background: #1a1a1a; color: #fff; }
+    .section { margin: 20px 0; padding: 15px; border: 1px solid #333; border-radius: 8px; }
+    .error { color: #ff6b6b; }
+    .success { color: #51cf66; }
+    .warning { color: #ffd43b; }
+    pre { background: #2a2a2a; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    button { background: #4DB9A5; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; margin: 5px; }
+    button:hover { background: #3a9485; }
+  </style>
+</head>
+<body>
+  <h1>🔍 MemLoop Auth Configuration Debug</h1>
+  
+  <div class="section">
+    <h2>Current Configuration</h2>
+    <pre id="config-display">Loading...</pre>
+    <button onclick="loadConfig()">Refresh Config</button>
+  </div>
+  
+  <div class="section">
+    <h2>Extension Info</h2>
+    <pre id="extension-info">Loading...</pre>
+  </div>
+  
+  <div class="section">
+    <h2>Test Authentication</h2>
+    <button onclick="testAuth()">Test OAuth Flow</button>
+    <pre id="auth-result"></pre>
+  </div>
+  
+  <div class="section">
+    <h2>Cognito Client Validation</h2>
+    <button onclick="validateClient()">Validate Client Configuration</button>
+    <pre id="validation-result"></pre>
+  </div>
+
+  <script>
+    async function loadConfig() {
+      try {
+        const config = await new Promise((resolve) => {
+          chrome.storage.sync.get(['cognito_domain', 'cognito_client_id', 'auth_exchange_url'], resolve);
+        });
+        
+        document.getElementById('config-display').innerHTML = JSON.stringify(config, null, 2);
+        
+        // Check for missing values
+        const missing = [];
+        if (!config.cognito_domain) missing.push('cognito_domain');
+        if (!config.cognito_client_id) missing.push('cognito_client_id');
+        if (!config.auth_exchange_url) missing.push('auth_exchange_url');
+        
+        if (missing.length > 0) {
+          document.getElementById('config-display').innerHTML += `\n\n❌ MISSING: ${missing.join(', ')}`;
+        } else {
+          document.getElementById('config-display').innerHTML += `\n\n✅ All required config present`;
+        }
+      } catch (e) {
+        document.getElementById('config-display').innerHTML = `Error: ${e.message}`;
+      }
+    }
+    
+    async function loadExtensionInfo() {
+      const info = {
+        extensionId: chrome.runtime.id,
+        redirectUri: chrome.identity.getRedirectURL(),
+        version: chrome.runtime.getManifest().version,
+        permissions: chrome.runtime.getManifest().permissions
+      };
+      
+      document.getElementById('extension-info').innerHTML = JSON.stringify(info, null, 2);
+    }
+    
+    async function testAuth() {
+      document.getElementById('auth-result').innerHTML = 'Testing authentication...';
+      
+      try {
+        // Import auth module
+        const auth = await import(chrome.runtime.getURL('utils/auth.js'));
+        const autoConfig = await import(chrome.runtime.getURL('utils/auto_config.js'));
+        
+        // Ensure config is loaded
+        await autoConfig.ensureAuthConfig();
+        
+        // Get current config
+        const config = await new Promise((resolve) => {
+          chrome.storage.sync.get(['cognito_domain', 'cognito_client_id', 'auth_exchange_url'], resolve);
+        });
+        
+        // Test sign in
+        const result = await auth.signInWithCognito({
+          domain: config.cognito_domain,
+          clientId: config.cognito_client_id,
+          exchangeUrl: config.auth_exchange_url
+        });
+        
+        document.getElementById('auth-result').innerHTML = JSON.stringify(result, null, 2);
+      } catch (e) {
+        document.getElementById('auth-result').innerHTML = `❌ Error: ${e.message}\n\nStack: ${e.stack}`;
+      }
+    }
+    
+    async function validateClient() {
+      document.getElementById('validation-result').innerHTML = 'Validating client configuration...';
+      
+      try {
+        const config = await new Promise((resolve) => {
+          chrome.storage.sync.get(['cognito_domain', 'cognito_client_id'], resolve);
+        });
+        
+        if (!config.cognito_domain || !config.cognito_client_id) {
+          document.getElementById('validation-result').innerHTML = '❌ Missing configuration';
+          return;
+        }
+        
+        // Test if we can reach the Cognito domain
+        const wellKnownUrl = `https://${config.cognito_domain}/.well-known/openid-configuration`;
+        
+        try {
+          const response = await fetch(wellKnownUrl);
+          const oidcConfig = await response.json();
+          
+          document.getElementById('validation-result').innerHTML = 
+            `✅ Cognito domain reachable\n\n` +
+            `Authorization endpoint: ${oidcConfig.authorization_endpoint}\n` +
+            `Token endpoint: ${oidcConfig.token_endpoint}\n` +
+            `Issuer: ${oidcConfig.issuer}\n\n` +
+            `Client ID: ${config.cognito_client_id}\n` +
+            `Extension Redirect URI: ${chrome.identity.getRedirectURL()}`;
+            
+        } catch (e) {
+          document.getElementById('validation-result').innerHTML = 
+            `❌ Cannot reach Cognito domain: ${e.message}\n\n` +
+            `Tried: ${wellKnownUrl}`;
+        }
+        
+      } catch (e) {
+        document.getElementById('validation-result').innerHTML = `❌ Error: ${e.message}`;
+      }
+    }
+    
+    // Load initial data
+    loadConfig();
+    loadExtensionInfo();
+  </script>
+</body>
+</html>
