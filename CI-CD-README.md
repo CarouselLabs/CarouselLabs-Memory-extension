@@ -26,11 +26,52 @@ The CI/CD pipeline automatically builds, tests, and deploys the MemLoop extensio
   - Updates version metadata
 
 ### 3. Smoke Test Job
-- **Trigger**: After successful deployment
+- **Trigger**: After successful deployment (non-PR only)
 - **Actions**:
-  - Downloads extension from S3
-  - Validates package integrity
-  - Tests configuration endpoints
+  - Runs automated smoke tests against the deployed extension
+
+## Client-Side Debugging for `TypeError: Failed to fetch`
+
+If you encounter a `TypeError: Failed to fetch` error during authentication, it's likely a client-side issue, as the server infrastructure is configured to handle CORS requests correctly. Follow these steps to debug:
+
+### 1. Check Manifest Permissions
+Ensure the `manifest.json` file includes the correct host permissions for the API endpoint. It should look like this:
+
+```json
+{
+  "host_permissions": [
+    "https://api.dev.carousellabs.co/*",
+    "https://api.staging.carousellabs.co/*",
+    "https://api.carousellabs.co/*"
+  ]
+}
+```
+
+### 2. Clear Browser Cache
+Chrome might cache a failed preflight (OPTIONS) request. To resolve this:
+- Open Chrome DevTools (F12 or Ctrl+Shift+I).
+- Go to the **Network** tab.
+- Check the **Disable cache** checkbox.
+- Hard refresh the extension (you can do this from the `chrome://extensions` page).
+
+### 3. Inspect Network Requests
+Use the DevTools Network tab to inspect the exact request being sent from the extension. 
+- Look for the `exchange` request.
+- Verify the `Request URL`, `Request Method` (should be POST), and `Request Headers` (`Content-Type: application/json`).
+- Check the response from the server. Even if it fails, the server should return CORS headers like `access-control-allow-origin`.
+
+### 4. Verify Fetch Request Code
+The code responsible for the token exchange is in `utils/auth.js` within the `doExchange` function. Ensure the `fetch` call is correctly structured:
+
+```javascript
+fetch('https://api.dev.carousellabs.co/auth/exchange', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ code, /* ... other params */ })
+});
+```
 
 ## Scripts
 
