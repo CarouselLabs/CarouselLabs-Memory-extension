@@ -1,0 +1,202 @@
+name: MemLoop Extension - Build & Deploy
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: 'Deployment stage'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+env:
+  NODE_VERSION: '18'
+  STAGE: ${{ github.event.inputs.stage || (github.ref == 'refs/heads/main' && 'prod') || (github.ref == 'refs/heads/develop' && 'dev') || 'dev' }}
+
+jobs:
+  build-and-test:
+    name: Build & Test Extension
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'CarouselLabs-Memory-extension/package-lock.json'
+
+      - name: Install Dependencies
+        working-directory: CarouselLabs-Memory-extension
+        run: npm ci
+
+      - name: Run Linting
+        working-directory: CarouselLabs-Memory-extension
+        run: npm run lint
+
+      - name: Configure AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-west-1
+
+      - name: Build Extension Config
+        working-directory: CarouselLabs-Memory-extension
+        run: |
+          chmod +x scripts/build-config.sh
+          ./scripts/build-config.sh ${{ env.STAGE }}
+
+      - name: Validate Extension Manifest
+        working-directory: CarouselLabs-Memory-extension
+        run: |
+          # Basic JSON validation
+          jq empty manifest.json
+          jq empty config/auth.defaults.json
+          echo "✅ Extension files validated"
+
+      - name: Create Extension Archive
+        working-directory: CarouselLabs-Memory-extension
+        run: |
+          # Remove development files
+          rm -rf node_modules tests .git* package*.json
+          
+          # Create timestamped build
+          BUILD_NAME="memloop-extension-${{ env.STAGE }}-$(date +%Y%m%d-%H%M%S)"
+          zip -r "${BUILD_NAME}.zip" . \
+            -x "*.git*" "node_modules/*" "tests/*" "scripts/*" "*.md" "*.code-workspace"
+          
+          echo "BUILD_ARTIFACT=${BUILD_NAME}.zip" >> $GITHUB_ENV
+          echo "✅ Extension packaged as ${BUILD_NAME}.zip"
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-${{ env.STAGE }}
+          path: CarouselLabs-Memory-extension/${{ env.BUILD_ARTIFACT }}
+          retention-days: 30
+
+  deploy-to-s3:
+    name: Deploy Extension to S3
+    needs: build-and-test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-west-1
+
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: extension-${{ env.STAGE }}
+
+      - name: Deploy to S3
+        run: |
+          # Resolve S3 bucket from SSM
+          BUCKET_PARAM="/tf/${{ env.STAGE }}/carousel-labs/services/mem0/extension_bucket"
+          S3_BUCKET=$(aws ssm get-parameter \
+            --name "$BUCKET_PARAM" \
+            --query Parameter.Value --output text 2>/dev/null || echo "memloop-extensions-${{ env.STAGE }}")
+          
+          # Upload with versioning
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          S3_KEY="releases/${{ env.STAGE }}/memloop-extension-${TIMESTAMP}.zip"
+          
+          aws s3 cp ${{ env.BUILD_ARTIFACT }} "s3://${S3_BUCKET}/${S3_KEY}"
+          
+          # Update latest pointer
+          aws s3 cp "s3://${S3_BUCKET}/${S3_KEY}" "s3://${S3_BUCKET}/releases/${{ env.STAGE }}/latest.zip"
+          
+          echo "✅ Extension deployed to s3://${S3_BUCKET}/${S3_KEY}"
+          echo "DOWNLOAD_URL=https://${S3_BUCKET}.s3.amazonaws.com/${S3_KEY}" >> $GITHUB_ENV
+
+  smoke-test:
+    name: Extension Smoke Test
+    needs: [build-and-test, deploy-to-s3]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-west-1
+
+      - name: Test Extension Configuration
+        working-directory: CarouselLabs-Memory-extension
+        run: |
+          # Download and verify the deployed extension
+          BUCKET_PARAM="/tf/${{ env.STAGE }}/carousel-labs/services/mem0/extension_bucket"
+          S3_BUCKET=$(aws ssm get-parameter \
+            --name "$BUCKET_PARAM" \
+            --query Parameter.Value --output text 2>/dev/null || echo "memloop-extensions-${{ env.STAGE }}")
+          
+          # Download latest
+          aws s3 cp "s3://${S3_BUCKET}/releases/${{ env.STAGE }}/latest.zip" ./test-extension.zip
+          
+          # Extract and validate
+          unzip -q test-extension.zip -d test-extension/
+          
+          # Validate critical files exist
+          test -f test-extension/manifest.json
+          test -f test-extension/config/auth.defaults.json
+          test -f test-extension/utils/auth.js
+          
+          # Validate auth config structure
+          jq -e '.cognito_domain' test-extension/config/auth.defaults.json
+          jq -e '.cognito_client_id' test-extension/config/auth.defaults.json
+          jq -e '.auth_exchange_url' test-extension/config/auth.defaults.json
+          
+          echo "✅ Extension smoke test passed"
+
+      - name: Test Backend Connectivity
+        run: |
+          # Test auth exchange endpoint
+          case "${{ env.STAGE }}" in
+            dev)
+              API_URL="https://api.dev.carousellabs.co"
+              ;;
+            staging)
+              API_URL="https://api.staging.carousellabs.co"
+              ;;
+            prod)
+              API_URL="https://api.carousellabs.co"
+              ;;
+          esac
+          
+          # Test health endpoint
+          curl -f -s "${API_URL}/health" > /dev/null
+          echo "✅ Backend connectivity verified"
+
+  notify:
+    name: Notify Deployment
+    needs: [build-and-test, deploy-to-s3, smoke-test]
+    if: always() && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deployment Status
+        run: |
+          if [[ "${{ needs.smoke-test.result }}" == "success" ]]; then
+            echo "🎉 MemLoop Extension successfully deployed to ${{ env.STAGE }}"
+            echo "Download URL: ${{ env.DOWNLOAD_URL }}"
+          else
+            echo "❌ MemLoop Extension deployment failed"
+            exit 1
+          fi

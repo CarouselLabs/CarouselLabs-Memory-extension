@@ -1,0 +1,261 @@
+name: MemLoop Extension CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: 'Deployment stage'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+env:
+  NODE_VERSION: '18'
+  STAGE: ${{ github.event.inputs.stage || (github.ref == 'refs/heads/main' && 'prod') || (github.ref == 'refs/heads/develop' && 'dev') || 'dev' }}
+  TENANT: 'carousel-labs'
+  AWS_REGION: 'eu-west-1'
+
+jobs:
+  build-test-extension:
+    name: Build & Test Extension
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      artifact-name: ${{ steps.version.outputs.artifact-name }}
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'CarouselLabs-Memory-extension/package-lock.json'
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install Dependencies
+        working-directory: CarouselLabs-Memory-extension
+        run: npm ci
+
+      - name: Build Extension
+        working-directory: CarouselLabs-Memory-extension
+        run: |
+          chmod +x scripts/ci-build.sh
+          ./scripts/ci-build.sh ${{ env.STAGE }}
+
+      - name: Run Tests
+        working-directory: CarouselLabs-Memory-extension
+        run: |
+          chmod +x scripts/test-extension.sh
+          ./scripts/test-extension.sh ${{ env.STAGE }}
+
+      - name: Generate Version Info
+        id: version
+        working-directory: CarouselLabs-Memory-extension
+        run: |
+          VERSION=$(jq -r '.version' manifest.json)
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          ARTIFACT_NAME="memloop-${VERSION}-${{ env.STAGE }}-${TIMESTAMP}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "artifact-name=${ARTIFACT_NAME}" >> $GITHUB_OUTPUT
+          echo "Extension version: ${VERSION}"
+          echo "Artifact name: ${ARTIFACT_NAME}"
+
+      - name: Package Extension
+        working-directory: CarouselLabs-Memory-extension
+        run: |
+          chmod +x scripts/package-extension.sh
+          ./scripts/package-extension.sh ${{ env.STAGE }} dist
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.version.outputs.artifact-name }}
+          path: |
+            CarouselLabs-Memory-extension/dist/
+            CarouselLabs-Memory-extension/config/
+            CarouselLabs-Memory-extension/manifest.json
+          retention-days: 30
+
+  deploy-extension:
+    name: Deploy Extension to S3
+    needs: build-test-extension
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build-test-extension.outputs.artifact-name }}
+          path: build-output/
+
+      - name: Get S3 Bucket from SSM
+        id: s3-config
+        run: |
+          BUCKET_PARAM="/tf/${{ env.STAGE }}/${{ env.TENANT }}/frontend/s3_bucket"
+          BUCKET=$(aws ssm get-parameter --name "$BUCKET_PARAM" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+          
+          if [ -z "$BUCKET" ]; then
+            # Fallback to CloudFormation stack output
+            STACK_NAME="${{ env.TENANT }}-${{ env.STAGE }}-frontend"
+            BUCKET=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs[?OutputKey==`S3BucketName`].OutputValue' --output text 2>/dev/null || echo "")
+          fi
+          
+          if [ -z "$BUCKET" ]; then
+            echo "❌ Could not determine S3 bucket"
+            exit 1
+          fi
+          
+          echo "bucket=${BUCKET}" >> $GITHUB_OUTPUT
+          echo "S3 Bucket: ${BUCKET}"
+
+      - name: Deploy to S3
+        run: |
+          S3_PREFIX="extensions/memloop/${{ env.STAGE }}"
+          VERSION="${{ needs.build-test-extension.outputs.version }}"
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          
+          echo "🚀 Deploying extension to S3..."
+          echo "Bucket: ${{ steps.s3-config.outputs.bucket }}"
+          echo "Prefix: ${S3_PREFIX}"
+          echo "Version: ${VERSION}"
+          
+          # Upload versioned packages
+          if [ -f "build-output/dist/memloop-${VERSION}-${{ env.STAGE }}.zip" ]; then
+            aws s3 cp "build-output/dist/memloop-${VERSION}-${{ env.STAGE }}.zip" \
+              "s3://${{ steps.s3-config.outputs.bucket }}/${S3_PREFIX}/memloop-${VERSION}-${{ env.STAGE }}.zip" \
+              --content-type "application/zip"
+          fi
+          
+          if [ -f "build-output/dist/memloop-${VERSION}-${{ env.STAGE }}.crx" ]; then
+            aws s3 cp "build-output/dist/memloop-${VERSION}-${{ env.STAGE }}.crx" \
+              "s3://${{ steps.s3-config.outputs.bucket }}/${S3_PREFIX}/memloop-${VERSION}-${{ env.STAGE }}.crx" \
+              --content-type "application/x-chrome-extension"
+          fi
+          
+          # Upload latest versions
+          if [ -f "build-output/dist/memloop-${VERSION}-${{ env.STAGE }}.zip" ]; then
+            aws s3 cp "build-output/dist/memloop-${VERSION}-${{ env.STAGE }}.zip" \
+              "s3://${{ steps.s3-config.outputs.bucket }}/${S3_PREFIX}/latest/memloop-latest.zip" \
+              --content-type "application/zip"
+          fi
+          
+          # Create metadata file
+          cat > metadata.json << EOF
+          {
+            "version": "${VERSION}",
+            "stage": "${{ env.STAGE }}",
+            "buildTime": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "gitCommit": "${{ github.sha }}",
+            "gitBranch": "${{ github.ref_name }}",
+            "buildNumber": "${{ github.run_number }}"
+          }
+          EOF
+          
+          aws s3 cp metadata.json \
+            "s3://${{ steps.s3-config.outputs.bucket }}/${S3_PREFIX}/metadata.json" \
+            --content-type "application/json"
+
+      - name: Invalidate CloudFront
+        run: |
+          # Get CloudFront distribution ID
+          DISTRIBUTION_PARAM="/tf/${{ env.STAGE }}/${{ env.TENANT }}/frontend/cloudfront_distribution_id"
+          DISTRIBUTION_ID=$(aws ssm get-parameter --name "$DISTRIBUTION_PARAM" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+          
+          if [ -z "$DISTRIBUTION_ID" ]; then
+            # Fallback to CloudFormation stack output
+            STACK_NAME="${{ env.TENANT }}-${{ env.STAGE }}-frontend"
+            DISTRIBUTION_ID=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontDistributionId`].OutputValue' --output text 2>/dev/null || echo "")
+          fi
+          
+          if [ -n "$DISTRIBUTION_ID" ]; then
+            echo "🔄 Invalidating CloudFront distribution: ${DISTRIBUTION_ID}"
+            aws cloudfront create-invalidation \
+              --distribution-id "$DISTRIBUTION_ID" \
+              --paths "/extensions/memloop/${{ env.STAGE }}/*"
+          else
+            echo "⚠️  CloudFront distribution not found, skipping invalidation"
+          fi
+
+  smoke-test:
+    name: Extension Smoke Test
+    needs: [build-test-extension, deploy-extension]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get S3 Bucket from SSM
+        id: s3-config
+        run: |
+          BUCKET_PARAM="/tf/${{ env.STAGE }}/${{ env.TENANT }}/frontend/s3_bucket"
+          BUCKET=$(aws ssm get-parameter --name "$BUCKET_PARAM" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+          
+          if [ -z "$BUCKET" ]; then
+            STACK_NAME="${{ env.TENANT }}-${{ env.STAGE }}-frontend"
+            BUCKET=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs[?OutputKey==`S3BucketName`].OutputValue' --output text 2>/dev/null || echo "")
+          fi
+          
+          echo "bucket=${BUCKET}" >> $GITHUB_OUTPUT
+
+      - name: Test Extension Deployment
+        run: |
+          S3_PREFIX="extensions/memloop/${{ env.STAGE }}"
+          VERSION="${{ needs.build-test-extension.outputs.version }}"
+          
+          echo "🧪 Testing deployed extension..."
+          
+          # Test metadata file
+          echo "  ✓ Testing metadata.json..."
+          aws s3 cp "s3://${{ steps.s3-config.outputs.bucket }}/${S3_PREFIX}/metadata.json" - | jq .
+          
+          # Test latest package exists
+          echo "  ✓ Testing latest package..."
+          aws s3 ls "s3://${{ steps.s3-config.outputs.bucket }}/${S3_PREFIX}/latest/memloop-latest.zip"
+          
+          # Test versioned package exists
+          echo "  ✓ Testing versioned package..."
+          aws s3 ls "s3://${{ steps.s3-config.outputs.bucket }}/${S3_PREFIX}/memloop-${VERSION}-${{ env.STAGE }}.zip"
+          
+          echo "✅ All smoke tests passed!"
+
+      - name: Notify Success
+        if: success()
+        run: |
+          echo "🎉 MemLoop Extension ${{ needs.build-test-extension.outputs.version }} successfully deployed to ${{ env.STAGE }}!"
+          echo "📦 Available at: s3://${{ steps.s3-config.outputs.bucket }}/extensions/memloop/${{ env.STAGE }}/"

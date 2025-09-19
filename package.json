@@ -6,6 +6,18 @@
   "scripts": {
     "lint": "eslint . --ext .js",
     "lint:fix": "eslint . --ext .js --fix",
+    "build": "scripts/ci-build.sh",
+    "build:dev": "scripts/ci-build.sh dev",
+    "build:staging": "scripts/ci-build.sh staging",
+    "build:prod": "scripts/ci-build.sh prod",
+    "package": "scripts/package-extension.sh",
+    "package:dev": "scripts/package-extension.sh dev",
+    "package:staging": "scripts/package-extension.sh staging",
+    "package:prod": "scripts/package-extension.sh prod",
+    "test": "scripts/test-extension.sh",
+    "test:dev": "scripts/test-extension.sh dev",
+    "test:staging": "scripts/test-extension.sh staging", 
+    "test:prod": "scripts/test-extension.sh prod",
     "seed-config": "SERVICE=mem0 ssm-seed-config",
     "seed-config:staging": "STAGE=staging SERVICE=mem0 ssm-seed-config",
     "seed-config:prod": "STAGE=prod SERVICE=mem0 ssm-seed-config"
